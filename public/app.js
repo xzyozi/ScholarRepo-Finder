@@ -8,6 +8,7 @@ let miniSearch = null;
 const I18N = {
   ja: {
     langLabel: "English",
+    pageTitle: "ScholarRepo-Finder 🔍📚 | 学術研究・アルゴリズム検証用OSS特化型検索",
     subtitle: "学術研究・アルゴリズム検証用OSS特化型 探索エンジン",
     exportBtn: "📥 Markdown一括保存",
     searchLabel: "キーワード検索",
@@ -42,6 +43,7 @@ const I18N = {
   },
   en: {
     langLabel: "日本語",
+    pageTitle: "ScholarRepo-Finder 🔍📚 | Academic Research & Algorithm Verification OSS",
     subtitle: "Discovery Engine for Academic Research & Algorithm Verification OSS",
     exportBtn: "📥 Export to Markdown",
     searchLabel: "Keyword Search",
@@ -122,6 +124,7 @@ async function initApp() {
 function applyI18n() {
   const t = I18N[currentLang];
   document.documentElement.lang = currentLang;
+  document.title = t.pageTitle;
   langLabel.textContent = t.langLabel;
 
   document.getElementById("headerSubtitle").textContent = t.subtitle;

@@ -36,6 +36,11 @@ flowchart LR
     F --> G[Markdown Export / Copy]
 ```
 
+For detailed design documentation:
+- 📘 [Basic Design Specification (SRF-BD-001)](./docs/design/SRF-BD-001_基本設計書.md)
+- 📊 [Data Structure & State Specification (SRF-DS-001)](./docs/design/SRF-DS-001_データ構造仕様書.md)
+- ⚙️ [Detailed Design Specification (SRF-DD-001)](./docs/design/SRF-DD-001_詳細設計書.md)
+
 ---
 
 ## 🚀 Quick Start
