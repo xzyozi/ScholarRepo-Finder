@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 # プロジェクト固有の情報（ここだけ書き換えればOK）
-name = "my-awesome-project"  
+name = "scholarrepo-finder"
 version = "0.1.0"
-description = "A modern Python project template"
+description = "学術研究・アルゴリズム検証用OSS特化型検索モジュール"
 readme = "README.md"
 requires-python = ">=3.10"
 
@@ -54,7 +54,7 @@ ignore = []
 
 [tool.ruff.lint.isort]
 # 自分のプロジェクトのパッケージ名を指定（自動ソート時にローカルパッケージとして認識させるため）
-known-first-party = ["app"]
+known-first-party = ["scholarrepo_finder"]
 force-sort-within-sections = true
 
 # ==========================================
