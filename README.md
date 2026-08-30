@@ -1,11 +1,11 @@
 # ScholarRepo-Finder 🔍📚
-> **学術研究・アルゴリズム検証用OSS特化型 検索・探索エンジン (GitHub Pages 完全対応)**
+> **学術研究・アルゴリズム検証用OSS特化型 検索・探索エンジン (GitHub Pages & Markdown エクスポート対応)**
 
 [![CI](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml/badge.svg)](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-ScholarRepo-Finder は、GitHub の膨大なリポジトリ群から **「学術的文脈を持つ」「堅牢な構造を持つ」「信頼できる開発者によって作成された」** シミュレーションおよびアルゴリズム検証用 OSS を自動抽出し、**GitHub Pages 上で完全無料・保守フリー・ゼロインフラで高速検索できる静的Webプラットフォーム** です。
+ScholarRepo-Finder は、GitHub の膨大なリポジトリ群から **「学術的文脈を持つ」「堅牢な構造を持つ」「信頼できる開発者によって作成された」** シミュレーションおよびアルゴリズム検証用 OSS を自動抽出し、**GitHub Pages 上で完全無料・保守フリー・ゼロインフラで高速検索し、Markdown形式でワンクリック出力できる静的Webプラットフォーム** です。
 
 ---
 
@@ -15,6 +15,7 @@ ScholarRepo-Finder は、GitHub の膨大なリポジトリ群から **「学術
 - **データ厳選・超軽量設計**: 高スコア（厳選基準クリア）のリポジトリのみをインデックス化。データ容量を数MB以内に抑え、ブラウザ上での瞬時ロードを実現。
 - **多角的スコアリング**: スター数に依存せず、ディレクトリ構造（`src/`, `tests/` 分離）、科学計算・OR系依存パッケージ、論文リンク（DOI, arXiv）、著者所属ドメインを総合評価。
 - **爆速クライアント検索**: ブラウザ内のインメモリ検索エンジン（MiniSearch）により、言語・スコア・論文有無でのファセット絞り込みが待ち時間ゼロ（0ms）で動作。
+- **Markdown ワンクリック出力**: 絞り込んだ検索結果を一括で Markdown ファイル（`.md`）としてダウンロード、または個別カードを Markdown 引用形式でクリップボードへコピー可能（Obsidian, Notion, 論文執筆ノートにそのまま活用可能）。
 
 ---
 
@@ -27,6 +28,7 @@ flowchart LR
     C --> D[データ軽量化 & 静的JSONビルド]
     D --> E[GitHub Pages デプロイ]
     E --> F[ブラウザ内 高速ファセット検索 UI]
+    F --> G[Markdown エクスポート / 引用コピー]
 ```
 
 詳細な設計については以下をご参照ください：
