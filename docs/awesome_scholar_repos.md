@@ -20,9 +20,9 @@
 | 12 | [N-Wouda/ALNS](https://github.com/N-Wouda/ALNS) | **71.5** | `Python` | ✅ あり | 2025-02-25 | Adaptive large neighbourhood search (and more!) in Python. |
 | 13 | [jofmi/agentpy](https://github.com/jofmi/agentpy) | **71.5** | `Python` | ✅ あり | 2025-02-06 | AgentPy is an open-source framework for the development and analysis of agent-based models in Python. |
 | 14 | [prosysscience/JSSEnv](https://github.com/prosysscience/JSSEnv) | **71.5** | `Python` | ✅ あり | 2025-05-20 | An OpenAi Gym environment for the Job Shop Scheduling problem. |
-| 15 | [kelleuseis/AMBER_Public](https://github.com/kelleuseis/AMBER_Public) | **69.0** | `Jupyter Notebook` | ✅ あり | 2026-03-16 | The AI-Ready Downhole Microseismic Benchmark Database (AMBER) https://doi.org/10.5281/zenodo.18944111 |
-| 16 | [Astronomax/vrptw-powerful-route-minimization-heuristic](https://github.com/Astronomax/vrptw-powerful-route-minimization-heuristic) | **65.0** | `C` | ✅ あり | 2026-05-28 | Implementation of "A powerful route minimization heuristic for the vehicle routing problem with time windows" Yuichi Nagata, Olli Bräysy |
-| 17 | [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) | **65.0** | `Python` | ✅ あり | 2026-08-30 | DeepTutor: Lifelong Personalized Tutoring. https://deeptutor.info/. |
+| 15 | [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) | **70.0** | `Python` | ✅ あり | 2026-08-30 | DeepTutor: Lifelong Personalized Tutoring. https://deeptutor.info/. |
+| 16 | [kelleuseis/AMBER_Public](https://github.com/kelleuseis/AMBER_Public) | **69.0** | `Jupyter Notebook` | ✅ あり | 2026-03-16 | The AI-Ready Downhole Microseismic Benchmark Database (AMBER) https://doi.org/10.5281/zenodo.18944111 |
+| 17 | [Astronomax/vrptw-powerful-route-minimization-heuristic](https://github.com/Astronomax/vrptw-powerful-route-minimization-heuristic) | **65.0** | `C` | ✅ あり | 2026-05-28 | Implementation of "A powerful route minimization heuristic for the vehicle routing problem with time windows" Yuichi Nagata, Olli Bräysy |
 | 18 | [camel-ai/camel](https://github.com/camel-ai/camel) | **65.0** | `Python` | ✅ あり | 2026-08-27 | 🐫 CAMEL: The first and the best multi-agent framework. Finding the Scaling Law of Agents. https://www.camel-ai.org |
 | 19 | [Thinklab-SJTU/ThinkMatch](https://github.com/Thinklab-SJTU/ThinkMatch) | **65.0** | `Python` | ✅ あり | 2026-08-13 | A research protocol for deep graph matching. |
 | 20 | [ds4dm/ecole](https://github.com/ds4dm/ecole) | **65.0** | `C++` | ✅ あり | 2025-12-20 | Extensible Combinatorial Optimization Learning Environments |
