@@ -7,28 +7,55 @@ from scholarrepo_finder.models import ExtractedFeatures, RepoRaw
 
 # 検出対象の科学計算・OR・シミュレーション系代表ライブラリ一覧
 TARGET_SCIENTIFIC_LIBS: Set[str] = {
+    # 科学計算・数値解析
     "numpy",
     "scipy",
-    "simpy",
-    "networkx",
+    "pandas",
+    "polars",
+    "ndarray",
+    "symengine",
+    "sympy",
+    "eigen",
+    "mumps",
+    # 最適化 & OR
     "ortools",
     "pulp",
     "cvxpy",
     "pyomo",
-    "pettingzoo",
-    "gymnasium",
-    "gym",
+    "scip",
+    "gurobi",
+    "cplex",
+    "casadi",
+    "optuna",
+    "deap",
+    # グラフ・ネットワーク
+    "networkx",
+    "igraph",
+    "graph-tool",
+    # シミュレーション & モデリング
+    "simpy",
+    "mesa",
+    "fenics",
+    "openfoam",
+    # 強化学習 & 機械学習
     "torch",
     "pytorch",
     "jax",
     "tensorflow",
-    "pandas",
-    "polars",
     "scikit-learn",
     "sklearn",
-    "ndarray",
-    "mesa",
-    "deap",
+    "gym",
+    "gymnasium",
+    "pettingzoo",
+    "stable-baselines3",
+    "sb3",
+    "ray",
+    # 量子 & バイオインフォマティクス
+    "qiskit",
+    "cirq",
+    "pennylane",
+    "biopython",
+    "rdkit",
 }
 
 # 学術識別子 (DOI / arXiv) 正規表現パターン

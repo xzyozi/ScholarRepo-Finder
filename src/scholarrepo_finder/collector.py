@@ -10,18 +10,49 @@ import httpx
 from scholarrepo_finder.models import RepoRaw
 
 DEFAULT_SEED_TOPICS = [
+    # 数理最適化・OR
     "operations-research",
     "vehicle-routing",
-    "agent-based-modeling",
-    "discrete-event-simulation",
-    "multi-agent-systems",
     "combinatorial-optimization",
+    "linear-programming",
+    "integer-programming",
+    "mixed-integer-linear-programming",
+    "mathematical-optimization",
+    "constraint-programming",
+    # シミュレーション & モデリング
+    "discrete-event-simulation",
+    "agent-based-modeling",
+    "multi-agent-systems",
+    "traffic-simulation",
+    "supply-chain-optimization",
+    "cellular-automata",
+    "complex-systems",
+    "monte-carlo-simulation",
+    "stochastic-simulation",
+    # アルゴリズム検証 & 機械学習/科学計算
+    "reinforcement-learning",
+    "deep-reinforcement-learning",
+    "graph-neural-networks",
+    "scientific-computing",
+    "computational-physics",
+    "numerical-simulation",
+    "evolutionary-algorithms",
+    "genetic-algorithm",
+    "bayesian-optimization",
+    "surrogate-modeling",
+    "finite-element-analysis",
+    "computational-fluid-dynamics",
 ]
 
 DEFAULT_SEED_QUERIES = [
     '"arxiv.org/abs" "simulation"',
     '"doi.org" "benchmark"',
     '"baseline algorithm" "reproduce"',
+    '"operations research" "algorithm" "benchmark"',
+    '"agent-based" "simulation" "benchmark"',
+    '"combinatorial optimization" "dataset"',
+    '"reinforcement learning" "environment" "simulation"',
+    '"discrete-event" "simulation" "python"',
 ]
 
 DEPENDENCY_FILE_CANDIDATES = [

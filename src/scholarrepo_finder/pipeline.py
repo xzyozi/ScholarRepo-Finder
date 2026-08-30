@@ -18,7 +18,7 @@ def run_pipeline(
     collector: GitHubCollector | None = None,
     public_data_dir: Path | str = "public/data",
     docs_dir: Path | str = "docs",
-    limit_per_query: int = 15,
+    limit_per_query: int = 30,
 ) -> int:
     """データ収集からスコアリング、静的データ出力までの一連のパイプラインを実行する."""
     col = collector or GitHubCollector()
