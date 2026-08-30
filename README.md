@@ -1,69 +1,62 @@
 # ScholarRepo-Finder 🔍📚
-> **学術研究・アルゴリズム検証用OSS特化型 検索・探索エンジン (GitHub Pages & Markdown エクスポート対応)**
+> **Specialized Search & Discovery Engine for Academic Research and Algorithm Verification OSS (GitHub Pages & Markdown Export)**
 
-[English](./README.en.md) | [日本語](./README.md)
+[English](./README.md) | [日本語](./README.ja.md)
 
 [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-brightgreen?logo=github)](https://xzyozi.github.io/ScholarRepo-Finder/)
 [![CI](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml/badge.svg)](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-🌐 **Webサイト (Live Demo)**: [https://xzyozi.github.io/ScholarRepo-Finder/](https://xzyozi.github.io/ScholarRepo-Finder/)
+🌐 **Live Demo Website**: [https://xzyozi.github.io/ScholarRepo-Finder/](https://xzyozi.github.io/ScholarRepo-Finder/)
 
-ScholarRepo-Finder は、GitHub の膨大なリポジトリ群から **「学術的文脈を持つ」「堅牢な構造を持つ」「信頼できる開発者によって作成された」** シミュレーションおよびアルゴリズム検証用 OSS を自動抽出し、**GitHub Pages 上で完全無料・保守フリー・ゼロインフラで高速検索し、Markdown形式でワンクリック出力できる静的Webプラットフォーム** です。
-
----
-
-## 🌟 主な特徴
-
-- **完全サーバーレス・ゼロインフラ**: 外部データベースや常時稼働サーバーを全廃。GitHub Actions による定期自動クロール＆ビルドと、GitHub Pages による静的配信で完全完結。
-- **データ厳選・超軽量設計**: 高スコア（厳選基準クリア）のリポジトリのみをインデックス化。データ容量を数MB以内に抑え、ブラウザ上での瞬時ロードを実現。
-- **多角的スコアリング**: スター数に依存せず、ディレクトリ構造（`src/`, `tests/` 分離）、科学計算・OR系依存パッケージ、論文リンク（DOI, arXiv）、著者所属ドメインを総合評価。
-- **爆速クライアント検索**: ブラウザ内のインメモリ検索エンジン（MiniSearch）により、言語・スコア・論文有無でのファセット絞り込みが待ち時間ゼロ（0ms）で動作。
-- **Markdown ワンクリック出力**: 絞り込んだ検索結果を一括で Markdown ファイル（`.md`）としてダウンロード、または個別カードを Markdown 引用形式でクリップボードへコピー可能（Obsidian, Notion, 論文執筆ノートにそのまま活用可能）。
+ScholarRepo-Finder is a static web platform that automatically discovers, rigorously evaluates, and indexes academic simulation and algorithm verification open-source software (OSS) from GitHub. It operates with **zero infrastructure, 100% free hosting via GitHub Pages, blazing-fast client-side search, and one-click Markdown export**.
 
 ---
 
-## 📐 アーキテクチャ概要
+## 🌟 Key Features
+
+- **100% Serverless & Zero-Infra**: No external databases or always-on servers. Automated periodic crawling & indexing via GitHub Actions, statically hosted on GitHub Pages.
+- **Curated & Ultra-Lightweight**: Only high-scoring repositories (Score >= 60.0) are indexed, keeping data size within a few MBs for instant in-browser loading.
+- **Multi-Factor Academic Scoring**: Structural cleanliness (`src/`, `tests/` separation), scientific/OR library dependencies (`numpy`, `scipy`, `ortools`, `simpy`, etc.), paper links (DOI / arXiv), and verified academic author domains.
+- **Instant Client-Side Search**: In-memory search (MiniSearch) enables 0ms facet filtering by language, minimum score, and paper presence.
+- **One-Click Markdown Export**: Download filtered results as a Markdown summary table or copy individual repo citations directly to clipboard (ideal for Obsidian, Notion, and research notes).
+
+---
+
+## 📐 Architecture
 
 ```mermaid
 flowchart LR
-    A[GitHub / Papers with Code API] --> B[GitHub Actions バッチ収集]
-    B --> C[特徴抽出 & 多角スコアリング]
-    C --> D[データ軽量化 & 静的JSONビルド]
-    D --> E[GitHub Pages デプロイ]
-    E --> F[ブラウザ内 高速ファセット検索 UI]
-    F --> G[Markdown エクスポート / 引用コピー]
+    A[GitHub / Papers with Code API] --> B[GitHub Actions Batch Ingestion]
+    B --> C[Feature Extraction & Scoring]
+    C --> D[Lightweight JSON Build]
+    D --> E[GitHub Pages Deployment]
+    E --> F[In-Browser MiniSearch UI]
+    F --> G[Markdown Export / Copy]
 ```
-
-詳細な設計については以下をご参照ください：
-- 📘 [基本設計書 (SRF-BD-001)](./docs/design/SRF-BD-001_基本設計書.md)
-- 📊 [データ構造・状態設計書 (SRF-DS-001)](./docs/design/SRF-DS-001_データ構造仕様書.md)
-- ⚙️ [詳細設計書 (SRF-DD-001)](./docs/design/SRF-DD-001_詳細設計書.md)
 
 ---
 
-## 🚀 クイックスタート
+## 🚀 Quick Start
 
-### 前提条件
-- Python 3.10 以上
-- [uv](https://github.com/astral-sh/uv) (推奨パッケージマネージャー)
+### Prerequisites
+- Python 3.10+
+- [uv](https://github.com/astral-sh/uv) (Recommended)
 
-### インストール & 開発
+### Development
 ```bash
-# 依存パッケージの同期
+# Sync dependencies
 uv sync
 
-# パイプラインのローカルテスト実行
+# Run pipeline locally
 uv run python -m scholarrepo_finder.pipeline
 
-# リント・テスト実行
-uv run ruff check .
-uv run mypy .
+# Run tests
 uv run pytest
 ```
 
 ---
 
-## 📄 ライセンス
-本プロジェクトは [MIT License](./LICENSE) のもとで公開されています。
+## 📄 License
+Released under the [MIT License](./LICENSE).
