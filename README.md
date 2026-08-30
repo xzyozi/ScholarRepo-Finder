@@ -1,20 +1,20 @@
 # ScholarRepo-Finder 🔍📚
-> **学術研究・アルゴリズム検証用OSS特化型 検索・探索エンジン**
+> **学術研究・アルゴリズム検証用OSS特化型 検索・探索エンジン (GitHub Pages 完全対応)**
 
 [![CI](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml/badge.svg)](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-ScholarRepo-Finder は、GitHub の膨大なリポジトリ群から **「学術的文脈を持つ」「堅牢な構造を持つ」「信頼できる開発者によって作成された」** シミュレーションおよびアルゴリズム検証用 OSS を自動抽出し、ノイズを排除した純度の高い検索インデックスを構築・提供するシステムです。
+ScholarRepo-Finder は、GitHub の膨大なリポジトリ群から **「学術的文脈を持つ」「堅牢な構造を持つ」「信頼できる開発者によって作成された」** シミュレーションおよびアルゴリズム検証用 OSS を自動抽出し、**GitHub Pages 上で完全無料・保守フリー・ゼロインフラで高速検索できる静的Webプラットフォーム** です。
 
 ---
 
 ## 🌟 主な特徴
 
-- **多角的スコアリング**: スター数に依存せず、ディレクトリ構造（`src/`, `tests/` 分離）、科学計算・OR系依存パッケージ、論文リンク（DOI, arXiv）、Papers with Code 連携状況を総合評価。
-- **著者プロファイリング**: 研究機関ドメイン（`.edu`/`.ac`）や活動実績に基づく信頼度乗数（User Trust Multiplier）を算出し、入門カリキュラム課題等の量産ノイズを自動排除。
-- **効率的クローリング**: GitHub API Rate Limit に対する Token Rotation および ETag（`304 Not Modified`）差分クロールによる API 消費の最小化。
-- **高速ファセット検索 API**: Elasticsearch 8.x + FastAPI による、言語・スコア・論文有無での柔軟な絞り込み。
+- **完全サーバーレス・ゼロインフラ**: 外部データベースや常時稼働サーバーを全廃。GitHub Actions による定期自動クロール＆ビルドと、GitHub Pages による静的配信で完全完結。
+- **データ厳選・超軽量設計**: 高スコア（厳選基準クリア）のリポジトリのみをインデックス化。データ容量を数MB以内に抑え、ブラウザ上での瞬時ロードを実現。
+- **多角的スコアリング**: スター数に依存せず、ディレクトリ構造（`src/`, `tests/` 分離）、科学計算・OR系依存パッケージ、論文リンク（DOI, arXiv）、著者所属ドメインを総合評価。
+- **爆速クライアント検索**: ブラウザ内のインメモリ検索エンジン（MiniSearch）により、言語・スコア・論文有無でのファセット絞り込みが待ち時間ゼロ（0ms）で動作。
 
 ---
 
@@ -22,11 +22,11 @@ ScholarRepo-Finder は、GitHub の膨大なリポジトリ群から **「学術
 
 ```mermaid
 flowchart LR
-    A[GitHub / Papers with Code API] --> B[Data Ingestion Layer]
-    B --> C[Feature Extraction Layer]
-    C --> D[Scoring & Hard Filters]
-    D -->|Score >= 60| E[(Elasticsearch 8.x)]
-    E --> F[FastAPI Search Service]
+    A[GitHub / Papers with Code API] --> B[GitHub Actions バッチ収集]
+    B --> C[特徴抽出 & 多角スコアリング]
+    C --> D[データ軽量化 & 静的JSONビルド]
+    D --> E[GitHub Pages デプロイ]
+    E --> F[ブラウザ内 高速ファセット検索 UI]
 ```
 
 詳細な設計については以下をご参照ください：
@@ -41,23 +41,18 @@ flowchart LR
 ### 前提条件
 - Python 3.10 以上
 - [uv](https://github.com/astral-sh/uv) (推奨パッケージマネージャー)
-- Docker & Docker Compose (Elasticsearch, Redis 起動用)
 
-### インストール
+### インストール & 開発
 ```bash
 # 依存パッケージの同期
 uv sync
-```
 
-### 開発・テスト
-```bash
-# リント・フォーマットチェック
+# パイプラインのローカルテスト実行
+uv run python -m src.pipeline
+
+# リント・テスト実行
 uv run ruff check .
-
-# 型チェック
 uv run mypy .
-
-# テスト実行
 uv run pytest
 ```
 
