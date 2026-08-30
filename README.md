@@ -1,6 +1,8 @@
 # ScholarRepo-Finder 🔍📚
 > **学術研究・アルゴリズム検証用OSS特化型 検索・探索エンジン (GitHub Pages & Markdown エクスポート対応)**
 
+[English](./README.en.md) | [日本語](./README.md)
+
 [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-brightgreen?logo=github)](https://xzyozi.github.io/ScholarRepo-Finder/)
 [![CI](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml/badge.svg)](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
