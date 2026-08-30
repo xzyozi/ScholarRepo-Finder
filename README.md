@@ -1,9 +1,12 @@
 # ScholarRepo-Finder 🔍📚
 > **学術研究・アルゴリズム検証用OSS特化型 検索・探索エンジン (GitHub Pages & Markdown エクスポート対応)**
 
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-brightgreen?logo=github)](https://xzyozi.github.io/ScholarRepo-Finder/)
 [![CI](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml/badge.svg)](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
+🌐 **Webサイト (Live Demo)**: [https://xzyozi.github.io/ScholarRepo-Finder/](https://xzyozi.github.io/ScholarRepo-Finder/)
 
 ScholarRepo-Finder は、GitHub の膨大なリポジトリ群から **「学術的文脈を持つ」「堅牢な構造を持つ」「信頼できる開発者によって作成された」** シミュレーションおよびアルゴリズム検証用 OSS を自動抽出し、**GitHub Pages 上で完全無料・保守フリー・ゼロインフラで高速検索し、Markdown形式でワンクリック出力できる静的Webプラットフォーム** です。
 
@@ -50,7 +53,7 @@ flowchart LR
 uv sync
 
 # パイプラインのローカルテスト実行
-uv run python -m src.pipeline
+uv run python -m scholarrepo_finder.pipeline
 
 # リント・テスト実行
 uv run ruff check .
