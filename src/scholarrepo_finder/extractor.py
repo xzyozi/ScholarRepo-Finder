@@ -117,15 +117,10 @@ def extract_features(
 
     # 1. 構造判定
     has_src = any(p.startswith("src/") or p.startswith("app/") or p in ["src", "app"] for p in tree)
-    has_tests = any(
-        p.startswith("tests/") or p.startswith("test/") or p in ["tests", "test"] for p in tree
-    )
-    has_docs = any(
-        p.startswith("docs/") or p.startswith("doc/") or p in ["docs", "doc"] for p in tree
-    )
+    has_tests = any(p.startswith("tests/") or p.startswith("test/") or p in ["tests", "test"] for p in tree)
+    has_docs = any(p.startswith("docs/") or p.startswith("doc/") or p in ["docs", "doc"] for p in tree)
     has_ci = any(
-        p.startswith(".github/workflows")
-        or p in [".travis.yml", ".circleci/config.yml", "azure-pipelines.yml"]
+        p.startswith(".github/workflows") or p in [".travis.yml", ".circleci/config.yml", "azure-pipelines.yml"]
         for p in tree
     )
 

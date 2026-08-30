@@ -107,9 +107,7 @@ class GitHubCollector:
                     encoding = data.get("encoding", "")
                     if encoding == "base64":
                         try:
-                            dep_files[filepath] = base64.b64decode(content).decode(
-                                "utf-8", errors="replace"
-                            )
+                            dep_files[filepath] = base64.b64decode(content).decode("utf-8", errors="replace")
                         except Exception:
                             pass
         return dep_files

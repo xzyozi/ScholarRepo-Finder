@@ -46,9 +46,7 @@ def calculate_structural_score(features: ExtractedFeatures) -> float:
     score = 0.0
 
     # 1. ディレクトリ分離度 (最大 15点)
-    dir_count = sum(
-        [features.has_src_or_app_dir, features.has_tests_dir, features.has_docs_dir]
-    )
+    dir_count = sum([features.has_src_or_app_dir, features.has_tests_dir, features.has_docs_dir])
     if dir_count == 3:
         score += 15.0
     elif dir_count == 2:
