@@ -61,8 +61,7 @@ def run_pipeline(
     print("📦 [Step 4/5] 配信データの軽量化とビルド...")
     static_items = build_static_repo_items(evaluated_records, config.indexing_threshold)
     print(
-        f"   -> 厳選基準 (Score >= {config.indexing_threshold}) をクリアした "
-        f"{len(static_items)} 件をインデックス化。"
+        f"   -> 厳選基準 (Score >= {config.indexing_threshold}) をクリアした {len(static_items)} 件をインデックス化。"
     )
 
     print("💾 [Step 5/5] 静的JSON、Markdown、観測レポートを出力...")
