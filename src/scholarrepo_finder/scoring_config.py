@@ -132,10 +132,10 @@ class ScoresConfig(_StrictConfigModel):
 class ScoringConfig(_StrictConfigModel):
     """`config/scoring.toml` の検証済み設定。"""
 
-    schema_version: int
+    schema_version: int = Field(strict=True)
     profile: ProfileConfig
     hard_filters: HardFilterConfig
-    indexing_threshold: float = Field(ge=0.0)
+    indexing_threshold: float = Field(ge=0.0, strict=True)
     scores: ScoresConfig
 
     @model_validator(mode="after")
