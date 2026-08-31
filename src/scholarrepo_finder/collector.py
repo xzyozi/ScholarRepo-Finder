@@ -316,10 +316,7 @@ def collect_seed_repositories(
                 collected_repos[repo_id] = raw
                 if len(collected_repos) % 100 == 0:
                     elapsed_seconds = perf_counter() - collection_started_at
-                    print(
-                        f"   -> Step 1: {len(collected_repos)} 件の詳細を取得済み "
-                        f"({elapsed_seconds:.1f} 秒経過)"
-                    )
+                    print(f"   -> Step 1: {len(collected_repos)} 件の詳細を取得済み ({elapsed_seconds:.1f} 秒経過)")
 
     for topic in target_topics:
         items = collector.search_repositories(f"topic:{topic}", per_page=limit_per_query)

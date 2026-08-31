@@ -51,10 +51,7 @@ def run_pipeline(
     step_started_at = perf_counter()
     raw_repos = collect_seed_repositories(col, limit_per_query=limit_per_query)
     step_elapsed_seconds = perf_counter() - step_started_at
-    print(
-        f"   -> {len(raw_repos)} 件のリポジトリメタデータを取得しました "
-        f"({step_elapsed_seconds:.1f} 秒)"
-    )
+    print(f"   -> {len(raw_repos)} 件のリポジトリメタデータを取得しました ({step_elapsed_seconds:.1f} 秒)")
 
     print("🔬 [Step 2/5] 特徴抽出とスコアリングを実行中...")
     step_started_at = perf_counter()
