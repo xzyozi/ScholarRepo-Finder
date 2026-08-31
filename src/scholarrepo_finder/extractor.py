@@ -226,11 +226,16 @@ def classify_delivery_form(
     has_executable_entrypoint = any(
         path.rsplit("/", 1)[-1] in executable_names or path.endswith("/__main__.py") for path in tree
     )
-    has_language_library = any(
-        evidence in {"python_src_package", "python_package_initializer", "rust_library_crate", "javascript_package_export"}
-        for evidence in public_api_evidence
+    library_evidence = {
+        "python_src_package",
+        "python_package_initializer",
+        "rust_library_crate",
+        "javascript_package_export",
+    }
+    has_language_library = any(evidence in library_evidence for evidence in public_api_evidence)
+    has_c_cpp_library = any(
+        evidence.startswith("c_cpp_header_implementation_pairs") for evidence in public_api_evidence
     )
-    has_c_cpp_library = any(evidence.startswith("c_cpp_header_implementation_pairs") for evidence in public_api_evidence)
 
     if has_language_library or (has_c_cpp_library and not has_executable_entrypoint):
         return "library"

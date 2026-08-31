@@ -42,7 +42,10 @@ class ExtractedFeatures(BaseModel):
     scientific_libs_detected: List[str] = Field(
         default_factory=list, description="検出された科学計算・OR系ライブラリ名一覧"
     )
-    delivery_form: str = Field("unknown", description="提供形態 (library / modular_application / executable_application / unknown)")
+    delivery_form: str = Field(
+        "unknown",
+        description="提供形態 (library / modular_application / executable_application / unknown)",
+    )
     public_api_evidence: List[str] = Field(default_factory=list, description="公開API・ライブラリ提供を示す根拠")
     module_partition_evidence: List[str] = Field(default_factory=list, description="責務別モジュール分割を示す根拠")
     usage_evidence: List[str] = Field(default_factory=list, description="利用方法を示す根拠")
