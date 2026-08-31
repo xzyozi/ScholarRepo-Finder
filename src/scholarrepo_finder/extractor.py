@@ -247,14 +247,8 @@ def classify_delivery_form(
     return "unknown"
 
 
-def extract_features(
-    raw: RepoRaw,
-    is_pwc: bool = False,
-    is_verified_org: bool = False,
-    author_email: str | None = None,
-    author_account_age_years: int = 0,
-) -> ExtractedFeatures:
-    """RepoRaw メタデータから ExtractedFeatures 特徴量ベクトルを構築する."""
+def extract_features(raw: RepoRaw, is_pwc: bool = False) -> ExtractedFeatures:
+    """RepoRaw メタデータとエンリッチメントから特徴量ベクトルを構築する."""
     tree = [path.lower() for path in raw.file_tree]
     readme = raw.readme_raw or ""
 
@@ -275,8 +269,11 @@ def extract_features(
     has_arxiv = bool(ARXIV_PATTERN.search(readme))
     keyword_evidence = extract_academic_keyword_evidence(readme + " " + (raw.description or ""))
     keyword_score = float(len(keyword_evidence))
-    email_domain = author_email.split("@")[-1].strip().lower() if author_email else None
-    is_edu = is_academic_email_domain(author_email)
+    owner_profile = raw.owner_profile
+    email_domain = owner_profile.email_domain if owner_profile else None
+    is_edu = is_academic_email_domain(email_domain)
+    is_verified_org = owner_profile.is_verified_org if owner_profile else False
+    account_age_years = owner_profile.account_age_years if owner_profile else 0
 
     return ExtractedFeatures(
         repo_id=raw.repo_id,
@@ -298,5 +295,5 @@ def extract_features(
         author_email_domain=email_domain,
         is_edu_or_ac_domain=is_edu,
         is_verified_org=is_verified_org,
-        author_account_age_years=author_account_age_years,
+        author_account_age_years=account_age_years,
     )

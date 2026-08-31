@@ -1,9 +1,22 @@
 """ScholarRepo-Finder データモデルおよび DTO 定義モジュール。"""
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
+
+
+class GitHubOwnerProfile(BaseModel):
+    """GitHub所有者・組織から安全に正規化した信頼度評価用属性。"""
+
+    login: str = Field(..., min_length=1, description="所有者アカウント名")
+    account_type: str = Field("Unknown", description="GitHubの所有者種別")
+    email_domain: Optional[str] = Field(None, description="公開メールから抽出したドメインのみ")
+    is_verified_org: bool = Field(False, description="認証済み組織フラグ")
+    account_age_years: int = Field(0, ge=0, description="アカウント経過年数")
+    lookup_status: Literal["not_checked", "found", "not_found", "failed"] = Field(
+        "not_checked", description="所有者プロフィール照会の結果"
+    )
 
 
 class RepoRaw(BaseModel):
@@ -12,6 +25,7 @@ class RepoRaw(BaseModel):
     repo_id: str = Field(..., description="リポジトリ識別子 (owner/repo)")
     name: str = Field(..., description="リポジトリ名")
     owner: str = Field(..., description="所有者アカウント名")
+    owner_profile: Optional[GitHubOwnerProfile] = Field(None, description="所有者・組織エンリッチメント結果")
     description: Optional[str] = Field(None, description="リポジトリ概要説明文")
     html_url: str = Field(..., description="GitHub リポジトリ URL")
     default_branch: str = Field("main", description="デフォルトブランチ名")
