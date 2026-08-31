@@ -8,7 +8,7 @@ name = "scholarrepo-finder"
 version = "0.1.0"
 description = "学術研究・アルゴリズム検証用OSS特化型検索モジュール"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 # 必須のパッケージ
 dependencies = [
@@ -61,7 +61,7 @@ force-sort-within-sections = true
 # Type Checker (Mypy)
 # ==========================================
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 plugins = ["pydantic.mypy"]
 # 基本的に厳しめの設定（Strict）にしておくのがモダンな手法
 warn_unused_configs = true

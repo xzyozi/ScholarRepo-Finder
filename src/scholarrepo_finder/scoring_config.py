@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
-import json
-from json import JSONDecodeError
 from pathlib import Path
+import tomllib
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-DEFAULT_SCORING_CONFIG_PATH = Path("config/scoring.json")
+DEFAULT_SCORING_CONFIG_PATH = Path("config/scoring.toml")
 _DELIVERY_FORMS = {"library", "modular_application", "executable_application", "unknown"}
 _DIRECTORY_COUNTS = {1, 2, 3}
 
@@ -131,7 +130,7 @@ class ScoresConfig(_StrictConfigModel):
 
 
 class ScoringConfig(_StrictConfigModel):
-    """`config/scoring.json` の検証済み設定。"""
+    """`config/scoring.toml` の検証済み設定。"""
 
     schema_version: int
     profile: ProfileConfig
@@ -156,16 +155,16 @@ class LoadedScoringConfig:
 
 
 def load_scoring_config(path: Path | str = DEFAULT_SCORING_CONFIG_PATH) -> LoadedScoringConfig:
-    """JSON設定を読込み、検証済みの設定と内容ハッシュを返す。
+    """TOML設定を読込み、検証済みの設定と内容ハッシュを返す。
 
     Args:
-        path: スコアリング設定JSONへのパス。
+        path: スコアリング設定TOMLへのパス。
 
     Returns:
         検証済み設定と元ファイルのSHA-256を含むオブジェクト。
 
     Raises:
-        ScoringConfigError: ファイル読み込み、JSON構文、または設定検証に失敗した場合。
+        ScoringConfigError: ファイル読み込み、TOML構文、または設定検証に失敗した場合。
     """
     config_path = Path(path)
     try:
@@ -174,9 +173,9 @@ def load_scoring_config(path: Path | str = DEFAULT_SCORING_CONFIG_PATH) -> Loade
         raise ScoringConfigError(f"スコアリング設定を読み込めません: {config_path}") from error
 
     try:
-        raw_data = json.loads(raw_bytes.decode("utf-8"))
-    except (JSONDecodeError, UnicodeDecodeError) as error:
-        raise ScoringConfigError(f"スコアリング設定はUTF-8のJSONである必要があります: {config_path}") from error
+        raw_data = tomllib.loads(raw_bytes.decode("utf-8"))
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as error:
+        raise ScoringConfigError(f"スコアリング設定はUTF-8のTOMLである必要があります: {config_path}") from error
 
     try:
         config = ScoringConfig.model_validate(raw_data)

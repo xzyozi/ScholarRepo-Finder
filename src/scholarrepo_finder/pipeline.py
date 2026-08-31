@@ -29,7 +29,7 @@ def run_pipeline(
         collector: GitHubデータ収集用コレクター。未指定時は本番実装を生成する。
         public_data_dir: 配信用JSONと観測レポートの出力先。
         docs_dir: 自動生成Markdownの出力先。
-        config_path: 検証するスコアリング設定JSONへのパス。
+        config_path: 検証するスコアリング設定TOMLへのパス。
         limit_per_query: シードクエリごとの収集上限。
 
     Returns:
