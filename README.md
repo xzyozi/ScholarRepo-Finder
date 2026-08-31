@@ -5,7 +5,7 @@
 
 [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-brightgreen?logo=github)](https://xzyozi.github.io/ScholarRepo-Finder/)
 [![CI](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml/badge.svg)](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 🌐 **Live Demo Website**: [https://xzyozi.github.io/ScholarRepo-Finder/](https://xzyozi.github.io/ScholarRepo-Finder/)
@@ -18,7 +18,7 @@ ScholarRepo-Finder is a static web platform that automatically discovers, rigoro
 
 - **100% Serverless & Zero-Infra**: No external databases or always-on servers. Automated periodic crawling & indexing via GitHub Actions, statically hosted on GitHub Pages.
 - **Curated & Ultra-Lightweight**: Only high-scoring repositories (Score >= 60.0) are indexed, keeping data size within a few MBs for instant in-browser loading.
-- **Multi-Factor Academic Scoring**: Structural cleanliness (`src/`, `tests/` separation), scientific/OR library dependencies (`numpy`, `scipy`, `ortools`, `simpy`, etc.), paper links (DOI / arXiv), and verified academic author domains.
+- **Multi-Factor Academic Scoring**: A commentable TOML profile prioritizes reusable delivery forms, public APIs, module boundaries, usage documentation, and reproducible score evidence.
 - **Instant Client-Side Search**: In-memory search (MiniSearch) enables 0ms facet filtering by language, minimum score, and paper presence.
 - **One-Click Markdown Export**: Download filtered results as a Markdown summary table or copy individual repo citations directly to clipboard (ideal for Obsidian, Notion, and research notes).
 
@@ -46,7 +46,7 @@ For detailed design documentation:
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.10+
+- Python 3.11+
 - [uv](https://github.com/astral-sh/uv) (Recommended)
 
 ### Development

@@ -103,7 +103,7 @@ erDiagram
 
 $$\text{Total Score} = (\text{Reusability Score} + \text{Maintainability Score} + \text{Research Context Score}) \times \text{User Trust Multiplier}$$
 
-配点、各評価軸の上限、ハードフィルター、掲載閾値、信頼度乗数は `config/scoring.json` を唯一の設定源とする。設定ファイルの完全なスキーマ、既定プロファイル、および検証規則は [SRF-SC-001 スコアリング設定仕様書](./SRF-SC-001_スコアリング設定仕様書.md) を正とする。
+配点、各評価軸の上限、ハードフィルター、掲載閾値、信頼度乗数は `config/scoring.toml` を唯一の設定源とする。設定ファイルの完全なスキーマ、既定プロファイル、および検証規則は [SRF-SC-001 スコアリング設定仕様書](./SRF-SC-001_スコアリング設定仕様書.md) を正とする。
 
 | 評価軸   | 初期上限 | 主な根拠                                                 |
 | :------- | -------: | :------------------------------------------------------- |

@@ -5,7 +5,7 @@
 
 [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-brightgreen?logo=github)](https://xzyozi.github.io/ScholarRepo-Finder/)
 [![CI](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml/badge.svg)](https://github.com/xzyozi/ScholarRepo-Finder/actions/workflows/ci.yml)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 🌐 **Webサイト (Live Demo)**: [https://xzyozi.github.io/ScholarRepo-Finder/](https://xzyozi.github.io/ScholarRepo-Finder/)
@@ -18,7 +18,7 @@ ScholarRepo-Finder は、GitHub の膨大なリポジトリ群から **「学術
 
 - **完全サーバーレス・ゼロインフラ**: 外部データベースや常時稼働サーバーを全廃。GitHub Actions による定期自動クロール＆ビルドと、GitHub Pages による静的配信で完全完結。
 - **データ厳選・超軽量設計**: 高スコア（厳選基準クリア）のリポジトリのみをインデックス化。データ容量を数MB以内に抑え、ブラウザ上での瞬時ロードを実現。
-- **多角的スコアリング**: スター数に依存せず、ディレクトリ構造（`src/`, `tests/` 分離）、科学計算・OR系依存パッケージ、論文リンク（DOI, arXiv）、著者所属ドメインを総合評価。
+- **多角的スコアリング**: コメント可能なTOMLプロファイルにより、再利用可能な提供形態、公開API、モジュール境界、利用手順、再現可能な選定根拠を評価。
 - **爆速クライアント検索**: ブラウザ内のインメモリ検索エンジン（MiniSearch）により、言語・スコア・論文有無でのファセット絞り込みが待ち時間ゼロ（0ms）で動作。
 - **Markdown ワンクリック出力**: 絞り込んだ検索結果を一括で Markdown ファイル（`.md`）としてダウンロード、または個別カードを Markdown 引用形式でクリップボードへコピー可能（Obsidian, Notion, 論文執筆ノートにそのまま活用可能）。
 
@@ -46,7 +46,7 @@ flowchart LR
 ## 🚀 クイックスタート
 
 ### 前提条件
-- Python 3.10 以上
+- Python 3.11 以上
 - [uv](https://github.com/astral-sh/uv) (推奨パッケージマネージャー)
 
 ### インストール & 開発
