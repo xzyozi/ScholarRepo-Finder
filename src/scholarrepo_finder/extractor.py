@@ -131,6 +131,121 @@ def is_academic_email_domain(email_or_domain: str | None) -> bool:
     return bool(EDU_DOMAIN_PATTERN.search(domain))
 
 
+def _matching_c_cpp_stems(tree: List[str]) -> Set[str]:
+    """公開ヘッダと実装ファイルの両方を持つ C/C++ モジュール名を返す."""
+    header_stems = {path.rsplit(".", 1)[0] for path in tree if path.endswith((".h", ".hpp"))}
+    source_stems = {path.rsplit(".", 1)[0] for path in tree if path.endswith((".c", ".cc", ".cpp", ".cxx"))}
+    return header_stems & source_stems
+
+
+def extract_public_api_evidence(raw: RepoRaw) -> List[str]:
+    """ファイルツリーとパッケージ定義から公開APIの根拠を抽出する."""
+    tree = [path.lower() for path in raw.file_tree]
+    evidence: List[str] = []
+    package_content = "\n".join(
+        content.lower() for path, content in raw.dependency_files.items() if path.lower().endswith("package.json")
+    )
+
+    if any(path.startswith("src/") and path.endswith("/__init__.py") for path in tree):
+        evidence.append("python_src_package")
+    if any(not path.startswith(("tests/", "test/")) and path.endswith("/__init__.py") for path in tree):
+        evidence.append("python_package_initializer")
+    if "src/lib.rs" in tree:
+        evidence.append("rust_library_crate")
+    if package_content and any(key in package_content for key in ('"exports"', '"main"', '"module"')):
+        evidence.append("javascript_package_export")
+
+    c_cpp_stems = sorted(_matching_c_cpp_stems(tree))
+    if c_cpp_stems:
+        evidence.append(f"c_cpp_header_implementation_pairs:{len(c_cpp_stems)}")
+
+    return evidence
+
+
+def extract_module_partition_evidence(raw: RepoRaw) -> List[str]:
+    """責務別モジュールへの分割を示すファイル構造上の根拠を抽出する."""
+    tree = [path.lower() for path in raw.file_tree]
+    evidence: List[str] = []
+    c_cpp_stems = _matching_c_cpp_stems(tree)
+    source_suffixes = (".c", ".cc", ".cpp", ".cxx", ".py", ".rs", ".js", ".ts")
+    source_modules = {
+        path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+        for path in tree
+        if path.endswith(source_suffixes)
+        and not path.startswith(("tests/", "test/"))
+        and path.rsplit("/", 1)[-1] not in {"main.c", "main.cpp", "main.py", "main.rs", "index.js", "index.ts"}
+    }
+
+    if len(c_cpp_stems) >= 2:
+        evidence.append(f"c_cpp_responsibility_modules:{len(c_cpp_stems)}")
+    if len(source_modules) >= 3:
+        evidence.append(f"multiple_source_modules:{len(source_modules)}")
+
+    return evidence
+
+
+def extract_usage_evidence(raw: RepoRaw) -> List[str]:
+    """README から導入・利用方法の説明を示す根拠を抽出する."""
+    readme = (raw.readme_raw or "").lower()
+    evidence: List[str] = []
+
+    for label, markers in {
+        "installation": ("installation", "install", "セットアップ", "導入"),
+        "usage": ("usage", "how to use", "使い方", "利用方法"),
+        "examples": ("example", "examples", "usage example", "使用例"),
+        "quick_start": ("quick start", "getting started", "クイックスタート"),
+    }.items():
+        if any(marker in readme for marker in markers):
+            evidence.append(label)
+
+    return evidence
+
+
+def extract_configurable_io_evidence(raw: RepoRaw) -> List[str]:
+    """設定ファイルまたはREADMEから設定可能な入出力の根拠を抽出する."""
+    tree = [path.lower() for path in raw.file_tree]
+    readme = (raw.readme_raw or "").lower()
+    evidence: List[str] = []
+
+    if any("config" in path or "settings" in path or "options" in path for path in tree):
+        evidence.append("configuration_file")
+    if any(marker in readme for marker in ("configuration", "configure", "command line", "arguments", "設定", "引数")):
+        evidence.append("configurable_interface_documented")
+
+    return evidence
+
+
+def classify_delivery_form(
+    raw: RepoRaw,
+    public_api_evidence: List[str],
+    module_partition_evidence: List[str],
+) -> str:
+    """再利用性の根拠と実行入口からリポジトリの提供形態を推定する."""
+    tree = [path.lower() for path in raw.file_tree]
+    executable_names = {"main.c", "main.cc", "main.cpp", "main.cxx", "main.py", "main.rs", "cli.py"}
+    has_executable_entrypoint = any(
+        path.rsplit("/", 1)[-1] in executable_names or path.endswith("/__main__.py") for path in tree
+    )
+    library_evidence = {
+        "python_src_package",
+        "python_package_initializer",
+        "rust_library_crate",
+        "javascript_package_export",
+    }
+    has_language_library = any(evidence in library_evidence for evidence in public_api_evidence)
+    has_c_cpp_library = any(
+        evidence.startswith("c_cpp_header_implementation_pairs") for evidence in public_api_evidence
+    )
+
+    if has_language_library or (has_c_cpp_library and not has_executable_entrypoint):
+        return "library"
+    if module_partition_evidence:
+        return "modular_application"
+    if has_executable_entrypoint:
+        return "executable_application"
+    return "unknown"
+
+
 def extract_features(
     raw: RepoRaw,
     is_pwc: bool = False,
@@ -139,29 +254,25 @@ def extract_features(
     author_account_age_years: int = 0,
 ) -> ExtractedFeatures:
     """RepoRaw メタデータから ExtractedFeatures 特徴量ベクトルを構築する."""
-    tree = [p.lower() for p in raw.file_tree]
+    tree = [path.lower() for path in raw.file_tree]
     readme = raw.readme_raw or ""
 
-    # 1. 構造判定
-    has_src = any(p.startswith("src/") or p.startswith("app/") or p in ["src", "app"] for p in tree)
-    has_tests = any(p.startswith("tests/") or p.startswith("test/") or p in ["tests", "test"] for p in tree)
-    has_docs = any(p.startswith("docs/") or p.startswith("doc/") or p in ["docs", "doc"] for p in tree)
+    has_src = any(path.startswith("src/") or path.startswith("app/") or path in ["src", "app"] for path in tree)
+    has_tests = any(path.startswith("tests/") or path.startswith("test/") or path in ["tests", "test"] for path in tree)
+    has_docs = any(path.startswith("docs/") or path.startswith("doc/") or path in ["docs", "doc"] for path in tree)
     has_ci = any(
-        p.startswith(".github/workflows") or p in [".travis.yml", ".circleci/config.yml", "azure-pipelines.yml"]
-        for p in tree
+        path.startswith(".github/workflows") or path in [".travis.yml", ".circleci/config.yml", "azure-pipelines.yml"]
+        for path in tree
     )
-
-    # 2. 依存ライブラリ検出
     scientific_libs = detect_scientific_libraries(raw.dependency_files, raw.topics)
-
-    # 3. 論文リンク (DOI / arXiv) 検出
+    public_api_evidence = extract_public_api_evidence(raw)
+    module_partition_evidence = extract_module_partition_evidence(raw)
+    usage_evidence = extract_usage_evidence(raw)
+    configurable_io_evidence = extract_configurable_io_evidence(raw)
+    delivery_form = classify_delivery_form(raw, public_api_evidence, module_partition_evidence)
     has_doi = bool(DOI_PATTERN.search(readme))
     has_arxiv = bool(ARXIV_PATTERN.search(readme))
-
-    # 4. 学術キーワードスコア
     keyword_score = calculate_academic_keyword_score(readme + " " + (raw.description or ""))
-
-    # 5. 著者情報
     email_domain = author_email.split("@")[-1].strip().lower() if author_email else None
     is_edu = is_academic_email_domain(author_email)
 
@@ -172,6 +283,11 @@ def extract_features(
         has_docs_dir=has_docs,
         has_ci_workflow=has_ci,
         scientific_libs_detected=scientific_libs,
+        delivery_form=delivery_form,
+        public_api_evidence=public_api_evidence,
+        module_partition_evidence=module_partition_evidence,
+        usage_evidence=usage_evidence,
+        configurable_io_evidence=configurable_io_evidence,
         has_doi_link=has_doi,
         has_arxiv_link=has_arxiv,
         is_pwc_official=is_pwc,

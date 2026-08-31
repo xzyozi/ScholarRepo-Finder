@@ -65,6 +65,56 @@ DEPENDENCY_FILE_CANDIDATES = [
     "CMakeLists.txt",
 ]
 
+SEED_CATEGORY_KEYWORDS: Dict[str, List[str]] = {
+    "operations_research": [
+        "operations research",
+        "operations-research",
+        "vehicle-routing",
+        "combinatorial-optimization",
+        "linear-programming",
+        "integer-programming",
+        "mathematical-optimization",
+        "constraint-programming",
+    ],
+    "simulation": [
+        "simulation",
+        "agent-based",
+        "multi-agent",
+        "traffic",
+        "cellular-automata",
+        "monte-carlo",
+        "stochastic",
+        "discrete-event",
+    ],
+    "numerical_computing": [
+        "scientific-computing",
+        "computational-physics",
+        "numerical",
+        "finite-element",
+        "computational-fluid",
+    ],
+    "machine_learning": [
+        "reinforcement-learning",
+        "reinforcement learning",
+        "graph-neural",
+        "evolutionary-algorithms",
+        "genetic-algorithm",
+        "bayesian-optimization",
+        "surrogate-modeling",
+    ],
+}
+
+
+def classify_seed_categories(seed: str) -> List[str]:
+    """シードトピックまたは検索クエリから分野カテゴリを判定する."""
+    normalized_seed = seed.lower()
+    categories = [
+        category
+        for category, keywords in SEED_CATEGORY_KEYWORDS.items()
+        if any(keyword in normalized_seed for keyword in keywords)
+    ]
+    return categories or ["unclassified"]
+
 
 class GitHubCollector:
     """GitHub API から学術・シミュレーションリポジトリを収集するクライアント."""
@@ -200,29 +250,34 @@ def collect_seed_repositories(
     queries: Optional[List[str]] = None,
     limit_per_query: int = 10,
 ) -> List[RepoRaw]:
-    """定義されたトピックおよびクエリからシードリポジトリを一括収集する."""
+    """定義済みシードから候補を収集し、候補ごとのシードカテゴリを保持する."""
     target_topics = topics or DEFAULT_SEED_TOPICS
     target_queries = queries or DEFAULT_SEED_QUERIES
     collected_repos: Dict[str, RepoRaw] = {}
 
-    # 1. トピック検索
+    def collect_items(items: List[Dict[str, Any]], seed_categories: List[str]) -> None:
+        """検索結果を重複排除しつつ、見つかったシードカテゴリを候補へ統合する."""
+        for item in items:
+            repo_id = item.get("full_name")
+            if not repo_id:
+                continue
+
+            existing = collected_repos.get(repo_id)
+            if existing:
+                existing.seed_categories = sorted(set(existing.seed_categories) | set(seed_categories))
+                continue
+
+            raw = collector.fetch_repository_details(item)
+            if raw:
+                raw.seed_categories = sorted(set(seed_categories))
+                collected_repos[repo_id] = raw
+
     for topic in target_topics:
         items = collector.search_repositories(f"topic:{topic}", per_page=limit_per_query)
-        for item in items:
-            repo_id = item.get("full_name")
-            if repo_id and repo_id not in collected_repos:
-                raw = collector.fetch_repository_details(item)
-                if raw:
-                    collected_repos[repo_id] = raw
+        collect_items(items, classify_seed_categories(topic))
 
-    # 2. キーワード検索
     for query in target_queries:
         items = collector.search_repositories(query, per_page=limit_per_query)
-        for item in items:
-            repo_id = item.get("full_name")
-            if repo_id and repo_id not in collected_repos:
-                raw = collector.fetch_repository_details(item)
-                if raw:
-                    collected_repos[repo_id] = raw
+        collect_items(items, classify_seed_categories(query))
 
     return list(collected_repos.values())
