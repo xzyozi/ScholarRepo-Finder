@@ -48,6 +48,8 @@ def build_static_repo_items(
                 delivery_form=features.delivery_form,
                 reusability_evidence=reusability_evidence,
                 paper=features.has_doi_link or features.has_arxiv_link or features.is_pwc_official,
+                pwc_status=raw.pwc_match.lookup_status if raw.pwc_match else "not_checked",
+                pwc_paper_url=raw.pwc_match.paper_url if raw.pwc_match else None,
                 edu=features.is_edu_or_ac_domain,
                 libs=features.scientific_libs_detected,
                 url=raw.html_url,

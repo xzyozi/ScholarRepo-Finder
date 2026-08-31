@@ -247,7 +247,7 @@ def classify_delivery_form(
     return "unknown"
 
 
-def extract_features(raw: RepoRaw, is_pwc: bool = False) -> ExtractedFeatures:
+def extract_features(raw: RepoRaw) -> ExtractedFeatures:
     """RepoRaw メタデータとエンリッチメントから特徴量ベクトルを構築する."""
     tree = [path.lower() for path in raw.file_tree]
     readme = raw.readme_raw or ""
@@ -270,6 +270,7 @@ def extract_features(raw: RepoRaw, is_pwc: bool = False) -> ExtractedFeatures:
     keyword_evidence = extract_academic_keyword_evidence(readme + " " + (raw.description or ""))
     keyword_score = float(len(keyword_evidence))
     owner_profile = raw.owner_profile
+    pwc_match = raw.pwc_match
     email_domain = owner_profile.email_domain if owner_profile else None
     is_edu = is_academic_email_domain(email_domain)
     is_verified_org = owner_profile.is_verified_org if owner_profile else False
@@ -289,7 +290,7 @@ def extract_features(raw: RepoRaw, is_pwc: bool = False) -> ExtractedFeatures:
         configurable_io_evidence=configurable_io_evidence,
         has_doi_link=has_doi,
         has_arxiv_link=has_arxiv,
-        is_pwc_official=is_pwc,
+        is_pwc_official=bool(pwc_match and pwc_match.is_official),
         academic_keyword_evidence=keyword_evidence,
         academic_keyword_score=keyword_score,
         author_email_domain=email_domain,

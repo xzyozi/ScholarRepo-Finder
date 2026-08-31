@@ -8,7 +8,7 @@ from scholarrepo_finder.extractor import (
     extract_features,
     is_academic_email_domain,
 )
-from scholarrepo_finder.models import GitHubOwnerProfile, RepoRaw
+from scholarrepo_finder.models import GitHubOwnerProfile, PapersWithCodeMatch, RepoRaw
 
 
 def test_is_academic_email_domain() -> None:
@@ -90,9 +90,14 @@ Includes benchmark datasets and experimental results.
             account_age_years=5,
             lookup_status="found",
         ),
+        pwc_match=PapersWithCodeMatch(
+            lookup_status="matched_official",
+            is_official=True,
+            repository_url="https://github.com/stanford-lab/cvrp-deep-solver",
+        ),
     )
 
-    features = extract_features(raw, is_pwc=True)
+    features = extract_features(raw)
 
     assert features.repo_id == "stanford-lab/cvrp-deep-solver"
     assert features.has_src_or_app_dir is True

@@ -12,12 +12,14 @@ from scholarrepo_finder.builder import (
 from scholarrepo_finder.collector import GitHubCollector, collect_seed_repositories
 from scholarrepo_finder.extractor import extract_features
 from scholarrepo_finder.models import ExtractedFeatures, RepoRaw, ScoreResult
+from scholarrepo_finder.pwc import PapersWithCodeClient
 from scholarrepo_finder.scorer import evaluate_repository
 from scholarrepo_finder.scoring_config import DEFAULT_SCORING_CONFIG_PATH, load_scoring_config
 
 
 def run_pipeline(
     collector: GitHubCollector | None = None,
+    pwc_client: PapersWithCodeClient | None = None,
     public_data_dir: Path | str = "public/data",
     docs_dir: Path | str = "docs",
     config_path: Path | str = DEFAULT_SCORING_CONFIG_PATH,
@@ -27,6 +29,7 @@ def run_pipeline(
 
     Args:
         collector: GitHubデータ収集用コレクター。未指定時は本番実装を生成する。
+        pwc_client: PWCアーカイブ照合クライアント。未指定時は本番実装を生成する。
         public_data_dir: 配信用JSONと観測レポートの出力先。
         docs_dir: 自動生成Markdownの出力先。
         config_path: 検証するスコアリング設定TOMLへのパス。
@@ -38,6 +41,7 @@ def run_pipeline(
     loaded_config = load_scoring_config(config_path)
     config = loaded_config.config
     col = collector or GitHubCollector()
+    pwc = pwc_client or PapersWithCodeClient()
 
     print(f"⚙️  [Step 0/5] スコア設定 {config.profile.id} v{config.profile.version} を検証しました。")
     print("🚀 [Step 1/5] シードリポジトリの収集を開始...")
@@ -47,6 +51,7 @@ def run_pipeline(
     print("🔬 [Step 2/5] 特徴抽出とスコアリングを実行中...")
     evaluated_records: list[tuple[RepoRaw, ScoreResult, ExtractedFeatures]] = []
     for raw in raw_repos:
+        raw.pwc_match = pwc.lookup_repository(raw.html_url)
         features = extract_features(raw)
         evaluated_records.append((raw, evaluate_repository(raw, features, loaded_config), features))
 

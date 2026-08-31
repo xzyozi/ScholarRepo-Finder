@@ -19,6 +19,19 @@ class GitHubOwnerProfile(BaseModel):
     )
 
 
+class PapersWithCodeMatch(BaseModel):
+    """Papers with Codeアーカイブにおけるリポジトリ照合結果。"""
+
+    lookup_status: Literal["not_checked", "matched_official", "matched_unofficial", "not_found", "failed"] = Field(
+        "not_checked", description="PWCアーカイブ照合状態"
+    )
+    is_official: bool = Field(False, description="公式実装として登録されているか")
+    repository_url: Optional[str] = Field(None, description="照合に使ったGitHubリポジトリURL")
+    paper_url: Optional[str] = Field(None, description="関連論文の公開URL")
+    arxiv_id: Optional[str] = Field(None, description="関連論文のarXiv識別子")
+    source: str = Field("pwc_archive", description="照合データの取得元")
+
+
 class RepoRaw(BaseModel):
     """データ収集層で取得されるリポジトリの生メタデータ。"""
 
@@ -26,6 +39,7 @@ class RepoRaw(BaseModel):
     name: str = Field(..., description="リポジトリ名")
     owner: str = Field(..., description="所有者アカウント名")
     owner_profile: Optional[GitHubOwnerProfile] = Field(None, description="所有者・組織エンリッチメント結果")
+    pwc_match: Optional[PapersWithCodeMatch] = Field(None, description="Papers with Codeアーカイブ照合結果")
     description: Optional[str] = Field(None, description="リポジトリ概要説明文")
     html_url: str = Field(..., description="GitHub リポジトリ URL")
     default_branch: str = Field("main", description="デフォルトブランチ名")
@@ -102,6 +116,8 @@ class StaticRepoItem(BaseModel):
     delivery_form: str = Field("unknown", description="提供形態")
     reusability_evidence: List[str] = Field(default_factory=list, description="再利用性根拠")
     paper: bool = Field(False, description="論文リンク有無フラグ")
+    pwc_status: str = Field("not_checked", description="Papers with Codeアーカイブ照合状態")
+    pwc_paper_url: Optional[str] = Field(None, description="PWCアーカイブが示す関連論文URL")
     edu: bool = Field(False, description="アカデミック著者フラグ")
     libs: List[str] = Field(default_factory=list, description="検索・表示用の科学計算ライブラリ")
     url: str = Field(..., description="リポジトリ URL")
