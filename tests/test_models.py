@@ -50,13 +50,19 @@ def test_score_result_model() -> None:
     score = ScoreResult(
         repo_id="test/repo",
         hard_filter_passed=True,
-        structural_score=45.0,
-        context_score=40.0,
+        reusability_score=30.0,
+        maintainability_score=20.0,
+        research_context_score=35.0,
         base_repo_score=85.0,
         user_trust_multiplier=1.3,
         total_score=110.5,
+        profile_id="reusability-v1",
+        profile_version=1,
+        config_sha256="a" * 64,
+        indexing_threshold=60.0,
     )
     assert score.hard_filter_passed is True
+    assert score.reusability_score == 30.0
     assert score.total_score == 110.5
     assert score.reject_reason is None
 

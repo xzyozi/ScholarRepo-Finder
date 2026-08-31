@@ -1,27 +1,29 @@
-"""ScholarRepo-Finder スコアリング＆フィルタリングモジュール (Scoring & Filtering)."""
+"""設定駆動のリポジトリ評価・ハードフィルタリングModule。"""
 
 from datetime import datetime, timezone
-from typing import Tuple
 
 from scholarrepo_finder.models import ExtractedFeatures, RepoRaw, ScoreResult
-
-# ハードフィルター基準定数
-MAX_INACTIVE_YEARS = 5
-MIN_README_CHAR_LENGTH = 100
-INDEXING_THRESHOLD_SCORE = 60.0
+from scholarrepo_finder.scoring_config import LoadedScoringConfig, ScoringConfig
 
 
-def check_hard_filters(raw: RepoRaw, now: datetime | None = None) -> Tuple[bool, str | None]:
-    """リポジトリがハードフィルター基準を満たしているか判定する.
+def check_hard_filters(
+    raw: RepoRaw,
+    config: ScoringConfig,
+    now: datetime | None = None,
+) -> tuple[bool, str | None]:
+    """リポジトリが設定されたハードフィルターを満たすか判定する。
+
+    Args:
+        raw: 評価対象のリポジトリ情報。
+        config: 検証済みスコアリング設定。
+        now: 評価基準日時。未指定時は現在のUTC時刻。
 
     Returns:
-        (合格フラグ, 不合格時の理由)
+        合格フラグと、不合格時の理由。
     """
-    # 1. ライセンスチェック
-    if not raw.license_spdx or raw.license_spdx.strip() == "":
+    if not raw.license_spdx or not raw.license_spdx.strip():
         return False, "OSSライセンスが明記されていないか不正です。"
 
-    # 2. 陳腐化チェック (最終コミットから5年以上経過)
     current_time = now or datetime.now(timezone.utc)
     commit_time = raw.last_commit_at
     if commit_time.tzinfo is None:
@@ -29,107 +31,124 @@ def check_hard_filters(raw: RepoRaw, now: datetime | None = None) -> Tuple[bool,
     if current_time.tzinfo is None:
         current_time = current_time.replace(tzinfo=timezone.utc)
 
+    inactive_years = config.hard_filters.max_inactive_years
     days_since_last_commit = (current_time - commit_time).days
-    if days_since_last_commit > MAX_INACTIVE_YEARS * 365:
-        return False, f"最終コミットから5年以上が経過しています ({days_since_last_commit // 365}年前)。"
+    if days_since_last_commit > inactive_years * 365:
+        return False, f"最終コミットから{inactive_years}年以上が経過しています ({days_since_last_commit // 365}年前)。"
 
-    # 3. README 文字数チェック (100文字以下)
-    readme_len = len((raw.readme_raw or "").strip())
-    if readme_len < MIN_README_CHAR_LENGTH:
-        return False, f"READMEの文字数が極小（{readme_len}文字）のため情報が不足しています。"
+    minimum_readme_length = config.hard_filters.min_readme_char_length
+    readme_length = len((raw.readme_raw or "").strip())
+    if readme_length < minimum_readme_length:
+        return False, f"READMEの文字数が極小（{readme_length}文字）のため情報が不足しています。"
 
     return True, None
 
 
-def calculate_structural_score(features: ExtractedFeatures) -> float:
-    """Repo Structural Score (構造スコア: 最大 50点) を算出する."""
-    score = 0.0
+def _capped_evidence_score(evidence: list[str], per_item: float, maximum: float) -> float:
+    """根拠件数に応じた加点を上限付きで算出する。"""
+    return min(len(evidence) * per_item, maximum)
 
-    # 1. ディレクトリ分離度 (最大 15点)
-    dir_count = sum([features.has_src_or_app_dir, features.has_tests_dir, features.has_docs_dir])
-    if dir_count == 3:
-        score += 15.0
-    elif dir_count == 2:
-        score += 10.0
-    elif dir_count == 1:
-        score += 5.0
 
-    # 2. 科学計算・OR系ライブラリの依存関係 (最大 20点)
-    if len(features.scientific_libs_detected) >= 2:
-        score += 20.0
-    elif len(features.scientific_libs_detected) == 1:
-        score += 15.0
+def calculate_reusability_score(features: ExtractedFeatures, config: ScoringConfig) -> float:
+    """提供形態と再利用性根拠から再利用性スコアを算出する。"""
+    weights = config.scores.reusability
+    score = weights.delivery_form.get(features.delivery_form, 0.0)
+    score += _capped_evidence_score(
+        features.public_api_evidence,
+        weights.public_api_evidence.per_item,
+        weights.public_api_evidence.maximum,
+    )
+    score += _capped_evidence_score(
+        features.module_partition_evidence,
+        weights.module_partition_evidence.per_item,
+        weights.module_partition_evidence.maximum,
+    )
+    score += _capped_evidence_score(
+        features.usage_evidence,
+        weights.usage_evidence.per_item,
+        weights.usage_evidence.maximum,
+    )
+    score += _capped_evidence_score(
+        features.configurable_io_evidence,
+        weights.configurable_io_evidence.per_item,
+        weights.configurable_io_evidence.maximum,
+    )
+    return min(score, weights.maximum)
 
-    # 3. 自動テスト / CI ワークフロー (最大 15点)
+
+def calculate_maintainability_score(features: ExtractedFeatures, config: ScoringConfig) -> float:
+    """構成分離とCIから保守性スコアを算出する。"""
+    weights = config.scores.maintainability
+    directory_count = sum((features.has_src_or_app_dir, features.has_tests_dir, features.has_docs_dir))
+    score = weights.directory_count.get(directory_count, 0.0)
     if features.has_ci_workflow:
-        score += 15.0
-
-    return min(score, 50.0)
-
-
-def calculate_context_score(features: ExtractedFeatures) -> float:
-    """Repo Context Score (学術文脈スコア: 最大 50点) を算出する."""
-    score = 0.0
-
-    # 1. 論文識別子 (DOI / arXiv リンク) (最大 30点)
-    if features.has_doi_link or features.has_arxiv_link:
-        score += 30.0
-
-    # 2. Papers with Code 公式連携 (最大 20点)
-    if features.is_pwc_official:
-        score += 20.0
-
-    # 3. 学術キーワード頻度スコア (最大 10点)
-    score += min(features.academic_keyword_score, 10.0)
-
-    return min(score, 50.0)
+        score += weights.ci_workflow
+    return min(score, weights.maximum)
 
 
-def calculate_user_trust_multiplier(features: ExtractedFeatures) -> float:
-    """User Trust Multiplier (著者信頼度乗数: 0.5x〜1.5x) を算出する."""
-    # 教育・研究機関ドメイン保有者
+def calculate_research_context_score(features: ExtractedFeatures, config: ScoringConfig) -> float:
+    """論文リンクと学術キーワード根拠から研究文脈スコアを算出する。"""
+    weights = config.scores.research_context
+    score = weights.paper_link if features.has_doi_link or features.has_arxiv_link else 0.0
+    score += _capped_evidence_score(
+        features.academic_keyword_evidence,
+        weights.academic_keyword.per_item,
+        weights.academic_keyword.maximum,
+    )
+    return min(score, weights.maximum)
+
+
+def calculate_user_trust_multiplier(features: ExtractedFeatures, config: ScoringConfig) -> float:
+    """著者情報から設定された信頼度乗数を選択する。"""
+    weights = config.scores.trust_multiplier
     if features.is_edu_or_ac_domain:
-        return 1.5
-
-    # 認証済み組織 (Verified Organization)
+        return weights.academic_domain
     if features.is_verified_org:
-        return 1.3
-
-    # 一般熟練開発者 (3年以上のアカウント)
-    if features.author_account_age_years >= 3:
-        return 1.1
-
-    # 標準
-    return 1.0
+        return weights.verified_organization
+    if features.author_account_age_years >= weights.account_age_years:
+        return weights.experienced_account
+    return weights.default
 
 
 def evaluate_repository(
     raw: RepoRaw,
     features: ExtractedFeatures,
+    loaded_config: LoadedScoringConfig,
     now: datetime | None = None,
 ) -> ScoreResult:
-    """リポジトリの総合スコアリングとハードフィルター判定を実行する."""
-    passed, reject_reason = check_hard_filters(raw, now)
+    """検証済み設定を用いてリポジトリを評価する。
 
-    structural_score = calculate_structural_score(features)
-    context_score = calculate_context_score(features)
-    base_repo_score = structural_score + context_score
-    user_multiplier = calculate_user_trust_multiplier(features)
+    Args:
+        raw: 評価対象のリポジトリ情報。
+        features: 抽出済み特徴量。
+        loaded_config: 検証済み設定と設定ハッシュ。
+        now: 評価基準日時。未指定時は現在日時。
 
-    # ハードフィルター通過時のみ乗数を乗算して総合スコアを計算
-    if passed:
-        total_score = round(base_repo_score * user_multiplier, 2)
-    else:
-        total_score = 0.0
+    Returns:
+        評価軸別内訳と設定識別子を含む評価結果。
+    """
+    config = loaded_config.config
+    passed, reject_reason = check_hard_filters(raw, config, now)
+    reusability_score = calculate_reusability_score(features, config)
+    maintainability_score = calculate_maintainability_score(features, config)
+    research_context_score = calculate_research_context_score(features, config)
+    base_repo_score = reusability_score + maintainability_score + research_context_score
+    user_multiplier = calculate_user_trust_multiplier(features, config)
+    total_score = round(base_repo_score * user_multiplier, 2) if passed else 0.0
 
     return ScoreResult(
         repo_id=raw.repo_id,
         hard_filter_passed=passed,
         reject_reason=reject_reason,
-        structural_score=structural_score,
-        context_score=context_score,
+        reusability_score=reusability_score,
+        maintainability_score=maintainability_score,
+        research_context_score=research_context_score,
         base_repo_score=base_repo_score,
         user_trust_multiplier=user_multiplier,
         total_score=total_score,
+        profile_id=config.profile.id,
+        profile_version=config.profile.version,
+        config_sha256=loaded_config.sha256,
+        indexing_threshold=config.indexing_threshold,
         evaluated_at=now or datetime.now(),
     )

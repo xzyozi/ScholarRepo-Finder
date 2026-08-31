@@ -103,23 +103,24 @@ def detect_scientific_libraries(dependency_files: dict[str, str], topics: List[s
     return sorted(list(detected))
 
 
-def calculate_academic_keyword_score(text: str) -> float:
-    """README 等のテキスト内の学術キーワード出現頻度からスコア (0.0〜10.0) を算出する."""
+def extract_academic_keyword_evidence(text: str) -> List[str]:
+    """README等から、設定駆動の加点に使用する学術キーワード根拠を抽出する."""
     if not text:
-        return 0.0
+        return []
 
+    evidence: List[str] = []
     text_lower = text.lower()
-    matched_count = 0
+    for keyword in ACADEMIC_KEYWORDS:
+        evidence.extend([keyword] * min(text_lower.count(keyword), 3))
+    return evidence
 
-    for kw in ACADEMIC_KEYWORDS:
-        if kw in text_lower:
-            # 出現回数を最大3回までカウントして合算
-            count = min(text_lower.count(kw), 3)
-            matched_count += count
 
-    # スコア正規化 (10キーワード × 重み -> 最大 10.0点)
-    score = min(matched_count * 1.5, 10.0)
-    return round(score, 2)
+def calculate_academic_keyword_score(text: str) -> float:
+    """後方互換用に学術キーワードの一致件数を返す.
+
+    配点と上限はこの関数では持たず、スコアリング設定で適用する。
+    """
+    return float(len(extract_academic_keyword_evidence(text)))
 
 
 def is_academic_email_domain(email_or_domain: str | None) -> bool:
@@ -272,7 +273,8 @@ def extract_features(
     delivery_form = classify_delivery_form(raw, public_api_evidence, module_partition_evidence)
     has_doi = bool(DOI_PATTERN.search(readme))
     has_arxiv = bool(ARXIV_PATTERN.search(readme))
-    keyword_score = calculate_academic_keyword_score(readme + " " + (raw.description or ""))
+    keyword_evidence = extract_academic_keyword_evidence(readme + " " + (raw.description or ""))
+    keyword_score = float(len(keyword_evidence))
     email_domain = author_email.split("@")[-1].strip().lower() if author_email else None
     is_edu = is_academic_email_domain(author_email)
 
@@ -291,6 +293,7 @@ def extract_features(
         has_doi_link=has_doi,
         has_arxiv_link=has_arxiv,
         is_pwc_official=is_pwc,
+        academic_keyword_evidence=keyword_evidence,
         academic_keyword_score=keyword_score,
         author_email_domain=email_domain,
         is_edu_or_ac_domain=is_edu,

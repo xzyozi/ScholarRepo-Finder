@@ -1,14 +1,20 @@
-"""スコアリング＆フィルターモジュールの単体テスト."""
+"""設定駆動スコアリングModuleのテスト。"""
 
 from datetime import datetime, timedelta, timezone
+
 from scholarrepo_finder.models import ExtractedFeatures, RepoRaw
 from scholarrepo_finder.scorer import (
-    calculate_context_score,
-    calculate_structural_score,
+    calculate_maintainability_score,
+    calculate_research_context_score,
+    calculate_reusability_score,
     calculate_user_trust_multiplier,
     check_hard_filters,
     evaluate_repository,
 )
+from scholarrepo_finder.scoring_config import load_scoring_config
+
+LOADED_CONFIG = load_scoring_config()
+CONFIG = LOADED_CONFIG.config
 
 
 def create_sample_raw(
@@ -16,9 +22,8 @@ def create_sample_raw(
     days_ago: int = 30,
     readme: str = "This is a sufficiently long README text containing detailed descriptions, benchmarks, algorithm formulations, and usage guides for simulation experiments.",
 ) -> RepoRaw:
-    """テスト用サンプル RepoRaw を生成する."""
+    """テスト用のRepoRawを生成する。"""
     now = datetime.now(timezone.utc)
-    commit_time = now - timedelta(days=days_ago)
     return RepoRaw(
         repo_id="test/repo",
         name="repo",
@@ -28,7 +33,7 @@ def create_sample_raw(
         stars=10,
         forks=2,
         created_at=now - timedelta(days=365),
-        last_commit_at=commit_time,
+        last_commit_at=now - timedelta(days=days_ago),
         license_spdx=license_spdx,
         primary_language="Python",
         readme_raw=readme,
@@ -36,106 +41,90 @@ def create_sample_raw(
 
 
 def test_check_hard_filters_pass() -> None:
-    """正常リポジトリのハードフィルター通過検証."""
-    raw = create_sample_raw()
-    passed, reason = check_hard_filters(raw)
+    """正常リポジトリが設定済みハードフィルターを通過することを検証する。"""
+    passed, reason = check_hard_filters(create_sample_raw(), CONFIG)
     assert passed is True
     assert reason is None
 
 
-def test_check_hard_filters_no_license() -> None:
-    """ライセンス欠如によるハードフィルター除外検証."""
-    raw = create_sample_raw(license_spdx=None)
-    passed, reason = check_hard_filters(raw)
-    assert passed is False
-    assert "ライセンス" in (reason or "")
+def test_check_hard_filters_rejections() -> None:
+    """ライセンス、陳腐化、READMEの除外規則を検証する。"""
+    assert check_hard_filters(create_sample_raw(license_spdx=None), CONFIG)[0] is False
+    assert check_hard_filters(create_sample_raw(days_ago=365 * 6), CONFIG)[0] is False
+    assert check_hard_filters(create_sample_raw(readme="Short"), CONFIG)[0] is False
 
 
-def test_check_hard_filters_inactive() -> None:
-    """5年以上更新がないことによる陳腐化除外検証."""
-    raw = create_sample_raw(days_ago=365 * 6)
-    passed, reason = check_hard_filters(raw)
-    assert passed is False
-    assert "5年以上" in (reason or "")
+def test_calculate_reusability_score() -> None:
+    """再利用性根拠が設定上限まで加点されることを検証する。"""
+    features = ExtractedFeatures(
+        repo_id="test/repo",
+        delivery_form="library",
+        public_api_evidence=["package", "export"],
+        module_partition_evidence=["modules", "headers"],
+        usage_evidence=["installation", "usage", "examples"],
+        configurable_io_evidence=["config", "cli"],
+    )
+    assert calculate_reusability_score(features, CONFIG) == 30.0
 
 
-def test_check_hard_filters_small_readme() -> None:
-    """README極小による情報不足除外検証."""
-    raw = create_sample_raw(readme="Short")
-    passed, reason = check_hard_filters(raw)
-    assert passed is False
-    assert "README" in (reason or "")
-
-
-def test_calculate_structural_score() -> None:
-    """構造スコアの算出検証."""
+def test_calculate_maintainability_score() -> None:
+    """ディレクトリ構成とCIから保守性を算出することを検証する。"""
     features = ExtractedFeatures(
         repo_id="test/repo",
         has_src_or_app_dir=True,
         has_tests_dir=True,
         has_docs_dir=True,
-        scientific_libs_detected=["numpy", "scipy"],
         has_ci_workflow=True,
     )
-    score = calculate_structural_score(features)
-    # 15 (dir) + 20 (libs) + 15 (ci) = 50.0
-    assert score == 50.0
+    assert calculate_maintainability_score(features, CONFIG) == 20.0
 
 
-def test_calculate_context_score() -> None:
-    """学術文脈スコアの算出検証."""
+def test_calculate_research_context_score() -> None:
+    """論文リンクとキーワード根拠から研究文脈を算出することを検証する。"""
     features = ExtractedFeatures(
         repo_id="test/repo",
-        has_doi_link=True,
+        has_arxiv_link=True,
+        academic_keyword_evidence=["benchmark"] * 10,
         is_pwc_official=True,
-        academic_keyword_score=8.5,
     )
-    score = calculate_context_score(features)
-    # 30 (doi) + 20 (pwc) + 8.5 (keywords) = 58.5 -> min(50.0) = 50.0
-    assert score == 50.0
+    assert calculate_research_context_score(features, CONFIG) == 50.0
+
 
 
 def test_calculate_user_trust_multiplier() -> None:
-    """著者信頼度乗数の算出検証."""
-    # 1. 教育機関
-    f_edu = ExtractedFeatures(repo_id="t/r", is_edu_or_ac_domain=True)
-    assert calculate_user_trust_multiplier(f_edu) == 1.5
-
-    # 2. Verified Org
-    f_org = ExtractedFeatures(repo_id="t/r", is_verified_org=True)
-    assert calculate_user_trust_multiplier(f_org) == 1.3
-
-    # 3. 熟練開発者
-    f_senior = ExtractedFeatures(repo_id="t/r", author_account_age_years=4)
-    assert calculate_user_trust_multiplier(f_senior) == 1.1
-
-    # 4. 標準
-    f_default = ExtractedFeatures(repo_id="t/r")
-    assert calculate_user_trust_multiplier(f_default) == 1.0
+    """設定に基づいて著者信頼度乗数を選ぶことを検証する。"""
+    assert calculate_user_trust_multiplier(ExtractedFeatures(repo_id="t/r", is_edu_or_ac_domain=True), CONFIG) == 1.5
+    assert calculate_user_trust_multiplier(ExtractedFeatures(repo_id="t/r", is_verified_org=True), CONFIG) == 1.3
+    assert calculate_user_trust_multiplier(ExtractedFeatures(repo_id="t/r", author_account_age_years=4), CONFIG) == 1.1
+    assert calculate_user_trust_multiplier(ExtractedFeatures(repo_id="t/r"), CONFIG) == 1.0
 
 
 def test_evaluate_repository_comprehensive() -> None:
-    """evaluate_repository による総合評価・スコア算出検証."""
-    raw = create_sample_raw()
+    """評価結果に新しい内訳と設定識別子が記録されることを検証する。"""
     features = ExtractedFeatures(
         repo_id="test/repo",
         has_src_or_app_dir=True,
         has_tests_dir=True,
         has_ci_workflow=True,
-        scientific_libs_detected=["numpy"],
+        delivery_form="library",
+        public_api_evidence=["package", "export"],
+        module_partition_evidence=["modules", "headers"],
+        usage_evidence=["usage", "examples", "installation"],
+        configurable_io_evidence=["config", "cli"],
         has_arxiv_link=True,
-        academic_keyword_score=5.0,
+        academic_keyword_evidence=["benchmark"] * 4,
         is_edu_or_ac_domain=True,
     )
-    # 構造: 10(dir) + 15(lib) + 15(ci) = 40
-    # 文脈: 30(arxiv) + 5(kw) = 35
-    # Base: 75.0
-    # Multiplier: 1.5
-    # Total: 75.0 * 1.5 = 112.5
-    result = evaluate_repository(raw, features)
+
+    result = evaluate_repository(create_sample_raw(), features, LOADED_CONFIG)
+
     assert result.hard_filter_passed is True
-    assert result.structural_score == 40.0
-    assert result.context_score == 35.0
-    assert result.base_repo_score == 75.0
+    assert result.reusability_score == 30.0
+    assert result.maintainability_score == 17.0
+    assert result.research_context_score == 41.0
+    assert result.base_repo_score == 88.0
     assert result.user_trust_multiplier == 1.5
-    assert result.total_score == 112.5
+    assert result.total_score == 132.0
+    assert result.profile_id == "reusability-v1"
+    assert result.profile_version == 1
+    assert result.config_sha256 == LOADED_CONFIG.sha256
