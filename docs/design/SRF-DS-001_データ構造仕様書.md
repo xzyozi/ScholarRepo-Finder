@@ -140,6 +140,8 @@ $$\text{Total Score} = (\text{Reusability Score} + \text{Maintainability Score} 
     "delivery_form": "modular_application",
     "reusability_evidence": ["c_cpp_header_implementation_pairs:3", "multiple_source_modules:3", "usage"],
     "paper": true,
+    "pwc_status": "matched_official",
+    "pwc_paper_url": "https://arxiv.org/abs/2401.00001",
     "edu": true,
     "libs": [],
     "url": "https://github.com/Mominyar/emergency-dispatch-simulation-system"

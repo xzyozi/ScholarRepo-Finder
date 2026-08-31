@@ -33,6 +33,7 @@ const I18N = {
     emptySubtitle: "検索条件や最低スコアを緩めてお試しください。",
     totalScoreBadge: "総合スコア",
     paperBadge: "📄 論文/DOI",
+    pwcOfficialBadge: "🔗 PWC公式一致",
     eduBadge: "🎓 学術機関",
     copyMdBtn: "📋 Copy MD",
     copySuccess: "Markdown引用をコピーしました",
@@ -68,6 +69,7 @@ const I18N = {
     emptySubtitle: "Try adjusting your search query or lowering the score threshold.",
     totalScoreBadge: "Total Score",
     paperBadge: "📄 Paper/DOI",
+    pwcOfficialBadge: "🔗 PWC Official Match",
     eduBadge: "🎓 Academic",
     copyMdBtn: "📋 Copy MD",
     copySuccess: "Copied Markdown citation to clipboard",
@@ -230,6 +232,7 @@ function renderResults() {
     card.className = "bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-indigo-500/50 p-5 rounded-2xl transition duration-200 shadow-sm flex flex-col space-y-3";
 
     const paperBadge = repo.paper ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">${t.paperBadge}</span>` : '';
+    const pwcBadge = repo.pwc_status === "matched_official" ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-500/10 text-violet-300 border border-violet-500/20">${t.pwcOfficialBadge}</span>` : '';
     const eduBadge = repo.edu ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">${t.eduBadge}</span>` : '';
     const langBadge = `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-700 text-slate-300">${repo.lang}</span>`;
     const topicTags = (repo.topics || []).slice(0, 5).map(tag => `<span class="text-xs text-slate-400 bg-slate-900/60 px-2 py-0.5 rounded border border-slate-800">#${tag}</span>`).join(" ");
@@ -243,6 +246,7 @@ function renderResults() {
             </a>
             ${langBadge}
             ${paperBadge}
+            ${pwcBadge}
             ${eduBadge}
           </div>
           <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">${repo.desc || ""}</p>
@@ -315,13 +319,13 @@ function exportToMarkdown() {
 }
 
 // 8. 個別引用コピー
-window.copyItemMarkdown = function(repoId) {
+window.copyItemMarkdown = function (repoId) {
   const t = I18N[currentLang];
   const repo = allRepos.find(r => r.id === repoId);
   if (!repo) return;
 
   const md = `- **[${repo.id}](${repo.url})** (Score: ${repo.score.toFixed(1)}, Lang: \`${repo.lang}\`)\n  - Description: ${repo.desc}\n  - Topics: \`${repo.topics.join(", ")}\`\n  - Paper/DOI: ${repo.paper ? "Yes" : "None"}`;
-  
+
   navigator.clipboard.writeText(md).then(() => {
     showToast(`[${repo.name}] ${t.copySuccess}`);
   });

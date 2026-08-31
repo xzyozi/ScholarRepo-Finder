@@ -5,9 +5,21 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from scholarrepo_finder.builder import build_static_repo_items, generate_awesome_markdown, save_static_json
-from scholarrepo_finder.models import ExtractedFeatures, PapersWithCodeMatch, RepoRaw, ScoreResult
+from scholarrepo_finder.builder import (
+    build_phase1_observation_report,
+    build_static_repo_items,
+    generate_awesome_markdown,
+    save_static_json,
+)
+from scholarrepo_finder.models import (
+    ExtractedFeatures,
+    GitHubOwnerProfile,
+    PapersWithCodeMatch,
+    RepoRaw,
+    ScoreResult,
+)
 from scholarrepo_finder.pipeline import run_pipeline
+from scholarrepo_finder.scoring_config import load_scoring_config
 
 MINIMUM_SCORE = 60.0
 
@@ -168,3 +180,50 @@ def test_run_pipeline(tmp_path: Path) -> None:
     mock_pwc_client.lookup_repository.assert_called_once_with(raw.html_url)
     assert report["profile"]["id"] == "reusability-v1"
     assert (docs_dir / "awesome_scholar_repos.md").exists()
+
+
+def test_build_phase1_observation_report_includes_enrichment_metrics() -> None:
+    """観測レポートがPWC照合と所有者信頼度の分布を記録する。"""
+    now = datetime.now(timezone.utc)
+    raw = create_raw("lab/verified-tool", now)
+    raw.seed_categories = ["simulation"]
+    raw.owner_profile = GitHubOwnerProfile(
+        login="lab",
+        account_type="Organization",
+        email_domain="lab.edu",
+        is_verified_org=True,
+        account_age_years=8,
+        lookup_status="found",
+    )
+    raw.pwc_match = PapersWithCodeMatch(
+        lookup_status="matched_official",
+        is_official=True,
+        repository_url=raw.html_url,
+    )
+    score = ScoreResult(
+        repo_id=raw.repo_id,
+        hard_filter_passed=True,
+        reusability_score=20.0,
+        maintainability_score=15.0,
+        research_context_score=20.0,
+        base_repo_score=55.0,
+        user_trust_multiplier=1.3,
+        total_score=71.5,
+    )
+    features = ExtractedFeatures(
+        repo_id=raw.repo_id,
+        delivery_form="library",
+        is_pwc_official=True,
+        is_verified_org=True,
+        is_edu_or_ac_domain=True,
+        author_account_age_years=8,
+    )
+
+    report = build_phase1_observation_report([(raw, score, features)], load_scoring_config())
+
+    assert report["report_version"] == 3
+    assert report["summary"]["pwc_lookup_status_counts"] == {"matched_official": 1}
+    assert report["summary"]["owner_account_type_counts"] == {"Organization": 1}
+    assert report["summary"]["verified_organization_count"] == 1
+    assert report["summary"]["account_age_year_buckets"] == {"6_or_more": 1}
+    assert report["evaluations"][0]["user_trust_multiplier"] == 1.3
