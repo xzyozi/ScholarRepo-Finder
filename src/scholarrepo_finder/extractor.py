@@ -103,23 +103,24 @@ def detect_scientific_libraries(dependency_files: dict[str, str], topics: List[s
     return sorted(list(detected))
 
 
-def calculate_academic_keyword_score(text: str) -> float:
-    """README 等のテキスト内の学術キーワード出現頻度からスコア (0.0〜10.0) を算出する."""
+def extract_academic_keyword_evidence(text: str) -> List[str]:
+    """README等から、設定駆動の加点に使用する学術キーワード根拠を抽出する."""
     if not text:
-        return 0.0
+        return []
 
+    evidence: List[str] = []
     text_lower = text.lower()
-    matched_count = 0
+    for keyword in ACADEMIC_KEYWORDS:
+        evidence.extend([keyword] * min(text_lower.count(keyword), 3))
+    return evidence
 
-    for kw in ACADEMIC_KEYWORDS:
-        if kw in text_lower:
-            # 出現回数を最大3回までカウントして合算
-            count = min(text_lower.count(kw), 3)
-            matched_count += count
 
-    # スコア正規化 (10キーワード × 重み -> 最大 10.0点)
-    score = min(matched_count * 1.5, 10.0)
-    return round(score, 2)
+def calculate_academic_keyword_score(text: str) -> float:
+    """後方互換用に学術キーワードの一致件数を返す.
+
+    配点と上限はこの関数では持たず、スコアリング設定で適用する。
+    """
+    return float(len(extract_academic_keyword_evidence(text)))
 
 
 def is_academic_email_domain(email_or_domain: str | None) -> bool:
@@ -246,14 +247,8 @@ def classify_delivery_form(
     return "unknown"
 
 
-def extract_features(
-    raw: RepoRaw,
-    is_pwc: bool = False,
-    is_verified_org: bool = False,
-    author_email: str | None = None,
-    author_account_age_years: int = 0,
-) -> ExtractedFeatures:
-    """RepoRaw メタデータから ExtractedFeatures 特徴量ベクトルを構築する."""
+def extract_features(raw: RepoRaw) -> ExtractedFeatures:
+    """RepoRaw メタデータとエンリッチメントから特徴量ベクトルを構築する."""
     tree = [path.lower() for path in raw.file_tree]
     readme = raw.readme_raw or ""
 
@@ -272,9 +267,14 @@ def extract_features(
     delivery_form = classify_delivery_form(raw, public_api_evidence, module_partition_evidence)
     has_doi = bool(DOI_PATTERN.search(readme))
     has_arxiv = bool(ARXIV_PATTERN.search(readme))
-    keyword_score = calculate_academic_keyword_score(readme + " " + (raw.description or ""))
-    email_domain = author_email.split("@")[-1].strip().lower() if author_email else None
-    is_edu = is_academic_email_domain(author_email)
+    keyword_evidence = extract_academic_keyword_evidence(readme + " " + (raw.description or ""))
+    keyword_score = float(len(keyword_evidence))
+    owner_profile = raw.owner_profile
+    pwc_match = raw.pwc_match
+    email_domain = owner_profile.email_domain if owner_profile else None
+    is_edu = is_academic_email_domain(email_domain)
+    is_verified_org = owner_profile.is_verified_org if owner_profile else False
+    account_age_years = owner_profile.account_age_years if owner_profile else 0
 
     return ExtractedFeatures(
         repo_id=raw.repo_id,
@@ -290,10 +290,11 @@ def extract_features(
         configurable_io_evidence=configurable_io_evidence,
         has_doi_link=has_doi,
         has_arxiv_link=has_arxiv,
-        is_pwc_official=is_pwc,
+        is_pwc_official=bool(pwc_match and pwc_match.is_official),
+        academic_keyword_evidence=keyword_evidence,
         academic_keyword_score=keyword_score,
         author_email_domain=email_domain,
         is_edu_or_ac_domain=is_edu,
         is_verified_org=is_verified_org,
-        author_account_age_years=author_account_age_years,
+        author_account_age_years=account_age_years,
     )

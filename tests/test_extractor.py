@@ -1,13 +1,14 @@
 """特徴抽出モジュールの単体テスト."""
 
 from datetime import datetime
+
 from scholarrepo_finder.extractor import (
     calculate_academic_keyword_score,
     detect_scientific_libraries,
     extract_features,
     is_academic_email_domain,
 )
-from scholarrepo_finder.models import RepoRaw
+from scholarrepo_finder.models import GitHubOwnerProfile, PapersWithCodeMatch, RepoRaw
 
 
 def test_is_academic_email_domain() -> None:
@@ -81,15 +82,22 @@ Includes benchmark datasets and experimental results.
         dependency_files={
             "requirements.txt": "numpy>=1.20\ntorch>=2.0\nortools>=9.0",
         },
+        owner_profile=GitHubOwnerProfile(
+            login="stanford-lab",
+            account_type="Organization",
+            email_domain="stanford.edu",
+            is_verified_org=True,
+            account_age_years=5,
+            lookup_status="found",
+        ),
+        pwc_match=PapersWithCodeMatch(
+            lookup_status="matched_official",
+            is_official=True,
+            repository_url="https://github.com/stanford-lab/cvrp-deep-solver",
+        ),
     )
 
-    features = extract_features(
-        raw,
-        is_pwc=True,
-        is_verified_org=True,
-        author_email="lead@stanford.edu",
-        author_account_age_years=5,
-    )
+    features = extract_features(raw)
 
     assert features.repo_id == "stanford-lab/cvrp-deep-solver"
     assert features.has_src_or_app_dir is True

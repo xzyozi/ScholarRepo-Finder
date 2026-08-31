@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from scholarrepo_finder.models import RepoRaw
+from scholarrepo_finder.models import GitHubOwnerProfile, RepoRaw
 
 DEFAULT_SEED_TOPICS = [
     # 数理最適化・OR
@@ -193,6 +193,43 @@ class GitHubCollector:
                             pass
         return dep_files
 
+    def fetch_owner_profile(self, owner_login: str, owner_type: str) -> GitHubOwnerProfile:
+        """GitHub所有者を照会し、公開メールのドメインだけを安全に保持する。"""
+        account_type = owner_type or "Unknown"
+        endpoint = "orgs" if account_type.lower() == "organization" else "users"
+        fallback = GitHubOwnerProfile(login=owner_login, account_type=account_type)
+        url = f"https://api.github.com/{endpoint}/{owner_login}"
+
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.get(url, headers=self.headers)
+        except httpx.HTTPError:
+            return fallback.model_copy(update={"lookup_status": "failed"})
+
+        if response.status_code == 404:
+            return fallback.model_copy(update={"lookup_status": "not_found"})
+        if response.status_code != 200:
+            return fallback.model_copy(update={"lookup_status": "failed"})
+
+        data = response.json()
+        created_at = data.get("created_at")
+        try:
+            created = datetime.fromisoformat(created_at.replace("Z", "+00:00")) if created_at else None
+        except (AttributeError, ValueError):
+            created = None
+        account_age_years = max(0, (datetime.now(timezone.utc) - created).days // 365) if created else 0
+        email = data.get("email")
+        email_domain = email.rsplit("@", 1)[-1].lower() if isinstance(email, str) and "@" in email else None
+
+        return GitHubOwnerProfile(
+            login=data.get("login") or owner_login,
+            account_type=account_type,
+            email_domain=email_domain,
+            is_verified_org=account_type.lower() == "organization" and bool(data.get("is_verified")),
+            account_age_years=account_age_years,
+            lookup_status="found",
+        )
+
     def fetch_repository_details(self, repo_data: Dict[str, Any]) -> Optional[RepoRaw]:
         """検索結果の 1 レコードから詳細な RepoRaw オブジェクトを構築する."""
         repo_id = repo_data.get("full_name", "")
@@ -223,11 +260,14 @@ class GitHubCollector:
 
         owner_info = repo_data.get("owner") or {}
         owner_name = owner_info.get("login", "") if isinstance(owner_info, dict) else ""
+        owner_type = owner_info.get("type", "Unknown") if isinstance(owner_info, dict) else "Unknown"
+        owner_profile = self.fetch_owner_profile(owner_name, owner_type) if owner_name else None
 
         return RepoRaw(
             repo_id=repo_id,
             name=repo_data.get("name", ""),
             owner=owner_name,
+            owner_profile=owner_profile,
             description=repo_data.get("description"),
             html_url=repo_data.get("html_url", f"https://github.com/{repo_id}"),
             default_branch=default_branch,
