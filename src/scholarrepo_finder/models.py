@@ -22,6 +22,7 @@ class RepoRaw(BaseModel):
     license_spdx: Optional[str] = Field(None, description="SPDX ライセンス識別子 (例: MIT)")
     primary_language: Optional[str] = Field(None, description="主要プログラミング言語")
     topics: List[str] = Field(default_factory=list, description="トピックタグ一覧")
+    seed_categories: List[str] = Field(default_factory=list, description="収集シードから判定した分野カテゴリ一覧")
     readme_raw: Optional[str] = Field(None, description="README 生テキスト")
     file_tree: List[str] = Field(default_factory=list, description="リポジトリ内ファイルパス一覧")
     dependency_files: Dict[str, str] = Field(
@@ -41,6 +42,11 @@ class ExtractedFeatures(BaseModel):
     scientific_libs_detected: List[str] = Field(
         default_factory=list, description="検出された科学計算・OR系ライブラリ名一覧"
     )
+    delivery_form: str = Field("unknown", description="提供形態 (library / modular_application / executable_application / unknown)")
+    public_api_evidence: List[str] = Field(default_factory=list, description="公開API・ライブラリ提供を示す根拠")
+    module_partition_evidence: List[str] = Field(default_factory=list, description="責務別モジュール分割を示す根拠")
+    usage_evidence: List[str] = Field(default_factory=list, description="利用方法を示す根拠")
+    configurable_io_evidence: List[str] = Field(default_factory=list, description="設定可能な入出力を示す根拠")
     has_doi_link: bool = Field(False, description="DOI リンク (doi.org) 検出フラグ")
     has_arxiv_link: bool = Field(False, description="arXiv リンク (arxiv.org/abs) 検出フラグ")
     is_pwc_official: bool = Field(False, description="Papers with Code 公式登録フラグ")
