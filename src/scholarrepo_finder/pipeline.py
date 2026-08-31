@@ -38,6 +38,9 @@ def run_pipeline(
     Returns:
         配信対象として出力したリポジトリ数。
     """
+    from time import perf_counter
+
+    pipeline_started_at = perf_counter()
     loaded_config = load_scoring_config(config_path)
     config = loaded_config.config
     col = collector or GitHubCollector()
@@ -45,26 +48,45 @@ def run_pipeline(
 
     print(f"⚙️  [Step 0/5] スコア設定 {config.profile.id} v{config.profile.version} を検証しました。")
     print("🚀 [Step 1/5] シードリポジトリの収集を開始...")
+    step_started_at = perf_counter()
     raw_repos = collect_seed_repositories(col, limit_per_query=limit_per_query)
-    print(f"   -> {len(raw_repos)} 件のリポジトリメタデータを取得しました。")
+    step_elapsed_seconds = perf_counter() - step_started_at
+    print(
+        f"   -> {len(raw_repos)} 件のリポジトリメタデータを取得しました "
+        f"({step_elapsed_seconds:.1f} 秒)"
+    )
 
     print("🔬 [Step 2/5] 特徴抽出とスコアリングを実行中...")
+    step_started_at = perf_counter()
     evaluated_records: list[tuple[RepoRaw, ScoreResult, ExtractedFeatures]] = []
-    for raw in raw_repos:
+    total_repositories = len(raw_repos)
+    for index, raw in enumerate(raw_repos, start=1):
         raw.pwc_match = pwc.lookup_repository(raw.html_url)
         features = extract_features(raw)
         evaluated_records.append((raw, evaluate_repository(raw, features, loaded_config), features))
+        if index % 100 == 0 or index == total_repositories:
+            elapsed_seconds = perf_counter() - step_started_at
+            print(f"   -> Step 2: {index}/{total_repositories} 件を評価済み ({elapsed_seconds:.1f} 秒経過)")
+    step_elapsed_seconds = perf_counter() - step_started_at
+    print(f"   -> Step 2 完了: {total_repositories} 件を評価 ({step_elapsed_seconds:.1f} 秒)")
 
     print("📊 [Step 3/5] 提供形態・シードカテゴリの観測レポートを作成中...")
+    step_started_at = perf_counter()
     observation_report = build_phase1_observation_report(evaluated_records, loaded_config)
+    step_elapsed_seconds = perf_counter() - step_started_at
+    print(f"   -> Step 3 完了 ({step_elapsed_seconds:.1f} 秒)")
 
     print("📦 [Step 4/5] 配信データの軽量化とビルド...")
+    step_started_at = perf_counter()
     static_items = build_static_repo_items(evaluated_records, config.indexing_threshold)
+    step_elapsed_seconds = perf_counter() - step_started_at
     print(
-        f"   -> 厳選基準 (Score >= {config.indexing_threshold}) をクリアした {len(static_items)} 件をインデックス化。"
+        f"   -> 厳選基準 (Score >= {config.indexing_threshold}) をクリアした {len(static_items)} 件をインデックス化 "
+        f"({step_elapsed_seconds:.1f} 秒)"
     )
 
     print("💾 [Step 5/5] 静的JSON、Markdown、観測レポートを出力...")
+    step_started_at = perf_counter()
     public_path = Path(public_data_dir) / "repos.json"
     docs_path = Path(docs_dir)
     save_static_json(static_items, public_path)
@@ -75,10 +97,12 @@ def run_pipeline(
         config.profile.id,
     )
     save_phase1_observation_report(observation_report, Path(public_data_dir) / "function_provider_observations.json")
+    step_elapsed_seconds = perf_counter() - step_started_at
     print(f"   -> JSON: {public_path}")
     print(f"   -> MD:   {docs_path / 'awesome_scholar_repos.md'}")
     print(f"   -> Analysis: {Path(public_data_dir) / 'function_provider_observations.json'}")
-    print("✨ パイプラインが正常終了しました！")
+    print(f"   -> Step 5 完了 ({step_elapsed_seconds:.1f} 秒)")
+    print(f"✨ パイプラインが正常終了しました！ 合計 {perf_counter() - pipeline_started_at:.1f} 秒")
     return len(static_items)
 
 

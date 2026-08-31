@@ -291,6 +291,9 @@ def collect_seed_repositories(
     limit_per_query: int = 10,
 ) -> List[RepoRaw]:
     """定義済みシードから候補を収集し、候補ごとのシードカテゴリを保持する."""
+    from time import perf_counter
+
+    collection_started_at = perf_counter()
     target_topics = topics or DEFAULT_SEED_TOPICS
     target_queries = queries or DEFAULT_SEED_QUERIES
     collected_repos: Dict[str, RepoRaw] = {}
@@ -311,6 +314,12 @@ def collect_seed_repositories(
             if raw:
                 raw.seed_categories = sorted(set(seed_categories))
                 collected_repos[repo_id] = raw
+                if len(collected_repos) % 100 == 0:
+                    elapsed_seconds = perf_counter() - collection_started_at
+                    print(
+                        f"   -> Step 1: {len(collected_repos)} 件の詳細を取得済み "
+                        f"({elapsed_seconds:.1f} 秒経過)"
+                    )
 
     for topic in target_topics:
         items = collector.search_repositories(f"topic:{topic}", per_page=limit_per_query)
