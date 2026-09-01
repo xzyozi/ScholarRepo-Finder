@@ -43,13 +43,20 @@ def run_pipeline(
     pipeline_started_at = perf_counter()
     loaded_config = load_scoring_config(config_path)
     config = loaded_config.config
+    owns_collector = collector is None
     col = collector or GitHubCollector()
     pwc = pwc_client or PapersWithCodeClient()
 
     print(f"⚙️  [Step 0/5] スコア設定 {config.profile.id} v{config.profile.version} を検証しました。")
     print("🚀 [Step 1/5] シードリポジトリの収集を開始...")
     step_started_at = perf_counter()
-    raw_repos = collect_seed_repositories(col, limit_per_query=limit_per_query)
+    try:
+        raw_repos = collect_seed_repositories(col, limit_per_query=limit_per_query)
+    finally:
+        # run_pipeline内で生成したコレクターの接続だけを解放する。
+        # 呼び出し元から渡されたコレクターは呼び出し元の責任で管理する。
+        if owns_collector:
+            col.close()
     step_elapsed_seconds = perf_counter() - step_started_at
     print(f"   -> {len(raw_repos)} 件のリポジトリメタデータを取得しました ({step_elapsed_seconds:.1f} 秒)")
 
