@@ -148,9 +148,7 @@ class GitHubCollector:
         # 所有者情報)を並列実行するためのスレッドプール。httpx.Clientはスレッドセーフ
         # であり、単一インスタンス共有の方が接続プーリング効率も良い
         # (https://github.com/encode/httpx/discussions/1633)。
-        self._detail_executor = ThreadPoolExecutor(
-            max_workers=max_detail_workers, thread_name_prefix="ghc-detail"
-        )
+        self._detail_executor = ThreadPoolExecutor(max_workers=max_detail_workers, thread_name_prefix="ghc-detail")
 
     def close(self) -> None:
         """自身が生成したスレッドプールとHTTPクライアントの接続をすべて解放する."""
@@ -281,9 +279,7 @@ class GitHubCollector:
         readme_future = self._detail_executor.submit(self.fetch_readme, repo_id)
         file_tree_future = self._detail_executor.submit(self.fetch_file_tree, repo_id, default_branch)
         owner_profile_future = (
-            self._detail_executor.submit(self.fetch_owner_profile, owner_name, owner_type)
-            if owner_name
-            else None
+            self._detail_executor.submit(self.fetch_owner_profile, owner_name, owner_type) if owner_name else None
         )
 
         readme = readme_future.result()
