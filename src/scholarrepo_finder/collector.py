@@ -1,9 +1,11 @@
 """ScholarRepo-Finder データ収集モジュール (Data Ingestion)."""
 
 import base64
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import os
+import threading
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -106,6 +108,66 @@ SEED_CATEGORY_KEYWORDS: Dict[str, List[str]] = {
 }
 
 
+class ApiCallObserver:
+    """GitHub API呼び出しの成否・レート制限抵触を集計する観測クラス.
+
+    `GitHubCollector` の並列化（複数スレッドから同一クライアントを共有）により、
+    以前より短時間に多くのリクエストが集中する。レート制限やその他の失敗が
+    サイレントに増えていないかを可視化するため、エンドポイント種別ごとに
+    ステータスを集計する。複数スレッドから呼ばれるため `threading.Lock` で保護する。
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+
+    def record(self, endpoint: str, status_code: Optional[int], headers: Optional[httpx.Headers] = None) -> None:
+        """1回のAPI呼び出し結果を記録する.
+
+        Args:
+            endpoint: 呼び出し元を識別するラベル（search / readme / file_tree /
+                dependency_files / owner_profile）。
+            status_code: HTTPステータスコード。例外発生時は None を渡す。
+            headers: レスポンスヘッダー（`httpx.Response.headers`）。403時に
+                `X-RateLimit-Remaining` を見てプライマリ/セカンダリのレート制限を
+                区別するために使う。
+        """
+        category = self._classify(status_code, headers)
+        with self._lock:
+            self._counts[endpoint][category] += 1
+
+    @staticmethod
+    def _classify(status_code: Optional[int], headers: Optional[httpx.Headers]) -> str:
+        if status_code is None:
+            return "exception"
+        if status_code == 200:
+            return "success"
+        if status_code == 404:
+            return "not_found"
+        if status_code == 403 or status_code == 429:
+            remaining = headers.get("X-RateLimit-Remaining") if headers is not None else None
+            if remaining == "0":
+                return "rate_limit_primary"
+            # プライマリのレート制限枠が残っているのに403/429が返る場合は、
+            # 同時実行数の急増によるSecondary rate limitの可能性が高い。
+            return "rate_limit_secondary_or_abuse"
+        return f"other_failure_{status_code}"
+
+    def summary(self) -> Dict[str, Dict[str, int]]:
+        """エンドポイントごとの集計結果のスナップショットを返す."""
+        with self._lock:
+            return {endpoint: dict(categories) for endpoint, categories in self._counts.items()}
+
+    def has_rate_limit_hits(self) -> bool:
+        """いずれかのエンドポイントでレート制限に抵触したかを返す."""
+        with self._lock:
+            return any(
+                category.startswith("rate_limit") and count > 0
+                for categories in self._counts.values()
+                for category, count in categories.items()
+            )
+
+
 def classify_seed_categories(seed: str) -> List[str]:
     """シードトピックまたは検索クエリから分野カテゴリを判定する."""
     normalized_seed = seed.lower()
@@ -132,6 +194,7 @@ class GitHubCollector:
         timeout: float = 15.0,
         client: Optional[httpx.Client] = None,
         max_detail_workers: int = 3,
+        observer: Optional[ApiCallObserver] = None,
     ) -> None:
         self.token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
         self.timeout = timeout
@@ -144,6 +207,7 @@ class GitHubCollector:
         # 外部から共有クライアントを渡された場合は所有権を持たず、closeでは破棄しない。
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=self.timeout)
+        self.observer = observer or ApiCallObserver()
         # fetch_repository_details内の独立したAPI呼び出し(README・ファイルツリー・
         # 所有者情報)を並列実行するためのスレッドプール。httpx.Clientはスレッドセーフ
         # であり、単一インスタンス共有の方が接続プーリング効率も良い
@@ -170,6 +234,7 @@ class GitHubCollector:
         params: dict[str, str | int] = {"q": query, "sort": sort, "order": order, "per_page": per_page}
 
         resp = self._client.get(url, headers=self.headers, params=params)
+        self.observer.record("search", resp.status_code, resp.headers)
         if resp.status_code == 200:
             data = resp.json()
             return data.get("items", [])
@@ -182,6 +247,7 @@ class GitHubCollector:
         """リポジトリの README テキストを取得する."""
         url = f"https://api.github.com/repos/{repo_id}/readme"
         resp = self._client.get(url, headers=self.headers)
+        self.observer.record("readme", resp.status_code, resp.headers)
         if resp.status_code == 200:
             data = resp.json()
             content = data.get("content", "")
@@ -198,6 +264,7 @@ class GitHubCollector:
         """リポジトリのファイルツリーを取得する (Git Trees API)."""
         url = f"https://api.github.com/repos/{repo_id}/git/trees/{default_branch}?recursive=1"
         resp = self._client.get(url, headers=self.headers)
+        self.observer.record("file_tree", resp.status_code, resp.headers)
         if resp.status_code == 200:
             tree_data = resp.json().get("tree", [])
             return [item.get("path", "") for item in tree_data if "path" in item]
@@ -211,6 +278,7 @@ class GitHubCollector:
         for filepath in target_files[:5]:  # 最大5ファイルまでに制限
             url = f"https://api.github.com/repos/{repo_id}/contents/{filepath}"
             resp = self._client.get(url, headers=self.headers)
+            self.observer.record("dependency_files", resp.status_code, resp.headers)
             if resp.status_code == 200:
                 data = resp.json()
                 content = data.get("content", "")
@@ -232,8 +300,10 @@ class GitHubCollector:
         try:
             response = self._client.get(url, headers=self.headers)
         except httpx.HTTPError:
+            self.observer.record("owner_profile", None)
             return fallback.model_copy(update={"lookup_status": "failed"})
 
+        self.observer.record("owner_profile", response.status_code, response.headers)
         if response.status_code == 404:
             return fallback.model_copy(update={"lookup_status": "not_found"})
         if response.status_code != 200:
@@ -324,6 +394,30 @@ class GitHubCollector:
             file_tree=file_tree,
             dependency_files=dep_files,
         )
+
+
+def format_observer_summary(observer: ApiCallObserver) -> str:
+    """観測結果を標準出力向けの1ブロックに整形する.
+
+    レート制限に1件でも抵触していれば警告として強調し、成功/失敗が判別しやすい
+    形式にする。Step 1完了後にログへ出すことで、収集件数や掲載件数の変化が
+    API側の失敗によるものかどうかを判断できるようにする。
+    """
+    summary = observer.summary()
+    if not summary:
+        return "   -> API呼び出し観測: 記録なし"
+
+    lines = ["   -> API呼び出し観測:"]
+    for endpoint in sorted(summary):
+        categories = summary[endpoint]
+        total = sum(categories.values())
+        detail = ", ".join(f"{category}={count}" for category, count in sorted(categories.items()))
+        lines.append(f"      - {endpoint}: 合計{total}回 ({detail})")
+
+    if observer.has_rate_limit_hits():
+        lines.append("      ⚠️  レート制限への抵触を検出しました。掲載件数・収集品質への影響を確認してください。")
+
+    return "\n".join(lines)
 
 
 def collect_seed_repositories(

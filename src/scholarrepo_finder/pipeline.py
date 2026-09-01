@@ -9,7 +9,7 @@ from scholarrepo_finder.builder import (
     save_phase1_observation_report,
     save_static_json,
 )
-from scholarrepo_finder.collector import GitHubCollector, collect_seed_repositories
+from scholarrepo_finder.collector import GitHubCollector, collect_seed_repositories, format_observer_summary
 from scholarrepo_finder.extractor import extract_features
 from scholarrepo_finder.models import ExtractedFeatures, RepoRaw, ScoreResult
 from scholarrepo_finder.pwc import PapersWithCodeClient
@@ -59,6 +59,7 @@ def run_pipeline(
             col.close()
     step_elapsed_seconds = perf_counter() - step_started_at
     print(f"   -> {len(raw_repos)} 件のリポジトリメタデータを取得しました ({step_elapsed_seconds:.1f} 秒)")
+    print(format_observer_summary(col.observer))
 
     print("🔬 [Step 2/5] 特徴抽出とスコアリングを実行中...")
     step_started_at = perf_counter()
