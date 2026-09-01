@@ -312,3 +312,107 @@ def test_search_repositories_records_observer(mock_get: MagicMock) -> None:
     collector.search_repositories("topic:simulation")
 
     assert collector.observer.summary() == {"search": {"success": 1}}
+
+
+def test_api_call_observer_detects_core_rate_limit_and_records_reset_time() -> None:
+    """core枠切れ(readme/file_tree/dependency_files/owner_profile)を検出し、リセット時刻を保持する。"""
+    observer = ApiCallObserver()
+    reset_epoch = "1735689600"  # 2025-01-01T00:00:00+00:00
+    headers = httpx.Headers({"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": reset_epoch})
+
+    assert observer.is_core_rate_limited() is False
+
+    observer.record("readme", 403, headers)
+
+    assert observer.is_core_rate_limited() is True
+    reset_at = observer.rate_limit_reset_at()
+    assert reset_at is not None
+    assert reset_at.year == 2025
+
+
+def test_api_call_observer_search_rate_limit_does_not_trigger_core_cutoff() -> None:
+    """Search APIのレート制限は別枠のため、coreの早期打ち切りフラグを立てない。"""
+    observer = ApiCallObserver()
+    headers = httpx.Headers({"X-RateLimit-Remaining": "0"})
+
+    observer.record("search", 403, headers)
+
+    assert observer.has_rate_limit_hits() is True
+    assert observer.is_core_rate_limited() is False
+
+
+def test_fetch_readme_skips_request_when_core_rate_limited() -> None:
+    """core枠切れ後、fetch_readmeはHTTPリクエストを送らずNoneを返す。"""
+    collector = GitHubCollector(token="dummy")
+    collector.observer.record("file_tree", 403, httpx.Headers({"X-RateLimit-Remaining": "0"}))
+    assert collector.observer.is_core_rate_limited() is True
+
+    with patch("httpx.Client.get") as mock_get:
+        result = collector.fetch_readme("owner/repo")
+
+    assert result is None
+    mock_get.assert_not_called()
+
+
+def test_fetch_file_tree_skips_request_when_core_rate_limited() -> None:
+    """core枠切れ後、fetch_file_treeはHTTPリクエストを送らず空リストを返す。"""
+    collector = GitHubCollector(token="dummy")
+    collector.observer.record("readme", 403, httpx.Headers({"X-RateLimit-Remaining": "0"}))
+
+    with patch("httpx.Client.get") as mock_get:
+        result = collector.fetch_file_tree("owner/repo")
+
+    assert result == []
+    mock_get.assert_not_called()
+
+
+def test_fetch_dependency_files_skips_request_when_core_rate_limited() -> None:
+    """core枠切れ後、fetch_dependency_filesはHTTPリクエストを送らず空辞書を返す。"""
+    collector = GitHubCollector(token="dummy")
+    collector.observer.record("owner_profile", 403, httpx.Headers({"X-RateLimit-Remaining": "0"}))
+
+    with patch("httpx.Client.get") as mock_get:
+        result = collector.fetch_dependency_files("owner/repo", ["requirements.txt"])
+
+    assert result == {}
+    mock_get.assert_not_called()
+
+
+def test_fetch_owner_profile_skips_request_when_core_rate_limited() -> None:
+    """core枠切れ後、fetch_owner_profileはHTTPリクエストを送らずskipped_rate_limitedを返す。"""
+    collector = GitHubCollector(token="dummy")
+    collector.observer.record("readme", 403, httpx.Headers({"X-RateLimit-Remaining": "0"}))
+
+    with patch("httpx.Client.get") as mock_get:
+        profile = collector.fetch_owner_profile("someone", "User")
+
+    assert profile.lookup_status == "skipped_rate_limited"
+    mock_get.assert_not_called()
+
+
+def test_fetch_repository_details_returns_none_and_notes_skip_when_core_rate_limited() -> None:
+    """core枠切れ後、fetch_repository_detailsはリポジトリをNoneとして除外し、スキップ件数を記録する。"""
+    collector = GitHubCollector(token="dummy")
+    collector.observer.record("readme", 403, httpx.Headers({"X-RateLimit-Remaining": "0"}))
+
+    with patch("httpx.Client.get") as mock_get:
+        raw = collector.fetch_repository_details({"full_name": "owner/repo", "owner": {"login": "owner"}})
+
+    assert raw is None
+    assert collector.observer.skipped_due_to_rate_limit_count() == 1
+    mock_get.assert_not_called()
+
+
+def test_format_observer_summary_reports_cutoff_and_skip_count() -> None:
+    """早期打ち切り発生時、format_observer_summaryにスキップ件数とリセット予定を含める。"""
+    observer = ApiCallObserver()
+    reset_epoch = "1735689600"
+    observer.record("readme", 403, httpx.Headers({"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": reset_epoch}))
+    observer.note_skipped_due_to_rate_limit()
+    observer.note_skipped_due_to_rate_limit()
+
+    output = format_observer_summary(observer)
+
+    assert "🛑" in output
+    assert "スキップしたリポジトリ数: 2件" in output
+    assert "2025-01-01" in output

@@ -108,6 +108,13 @@ SEED_CATEGORY_KEYWORDS: Dict[str, List[str]] = {
 }
 
 
+# README・ファイルツリー・依存定義・所有者情報の各エンドポイントは、GitHubの
+# "core" レート制限枠を共有する。一方 search_repositories が使う Search API は
+# 別枠のレート制限を持つため、coreの枠切れを検出してもsearchの呼び出しは
+# 妨げない。 https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+CORE_RATE_LIMIT_ENDPOINTS = frozenset({"readme", "file_tree", "dependency_files", "owner_profile"})
+
+
 class ApiCallObserver:
     """GitHub API呼び出しの成否・レート制限抵触を集計する観測クラス.
 
@@ -115,11 +122,19 @@ class ApiCallObserver:
     以前より短時間に多くのリクエストが集中する。レート制限やその他の失敗が
     サイレントに増えていないかを可視化するため、エンドポイント種別ごとに
     ステータスを集計する。複数スレッドから呼ばれるため `threading.Lock` で保護する。
+
+    また、"core" レート制限枠切れを検出した場合はその状態を保持し、
+    `GitHubCollector` の各メソッドが以降の無駄なHTTPリクエストを送らずに
+    早期打ち切りできるようにする（実測でcore枠切れ後も762回分のリクエストを
+    送り続けてしまい、全て失敗する事象を確認したため）。
     """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        self._core_rate_limited = False
+        self._rate_limit_reset_at: Optional[datetime] = None
+        self._skipped_due_to_rate_limit = 0
 
     def record(self, endpoint: str, status_code: Optional[int], headers: Optional[httpx.Headers] = None) -> None:
         """1回のAPI呼び出し結果を記録する.
@@ -135,6 +150,13 @@ class ApiCallObserver:
         category = self._classify(status_code, headers)
         with self._lock:
             self._counts[endpoint][category] += 1
+            if (
+                category == "rate_limit_primary"
+                and endpoint in CORE_RATE_LIMIT_ENDPOINTS
+                and not self._core_rate_limited
+            ):
+                self._core_rate_limited = True
+                self._rate_limit_reset_at = self._parse_reset_at(headers)
 
     @staticmethod
     def _classify(status_code: Optional[int], headers: Optional[httpx.Headers]) -> str:
@@ -153,6 +175,19 @@ class ApiCallObserver:
             return "rate_limit_secondary_or_abuse"
         return f"other_failure_{status_code}"
 
+    @staticmethod
+    def _parse_reset_at(headers: Optional[httpx.Headers]) -> Optional[datetime]:
+        """`X-RateLimit-Reset`(UNIX epoch秒)をUTCのdatetimeへ変換する."""
+        if headers is None:
+            return None
+        reset_epoch = headers.get("X-RateLimit-Reset")
+        if not reset_epoch:
+            return None
+        try:
+            return datetime.fromtimestamp(int(reset_epoch), tz=timezone.utc)
+        except (TypeError, ValueError):
+            return None
+
     def summary(self) -> Dict[str, Dict[str, int]]:
         """エンドポイントごとの集計結果のスナップショットを返す."""
         with self._lock:
@@ -166,6 +201,26 @@ class ApiCallObserver:
                 for categories in self._counts.values()
                 for category, count in categories.items()
             )
+
+    def is_core_rate_limited(self) -> bool:
+        """coreレート制限枠が切れており、以降の詳細取得を打ち切るべきかを返す."""
+        with self._lock:
+            return self._core_rate_limited
+
+    def rate_limit_reset_at(self) -> Optional[datetime]:
+        """coreレート制限のリセット予定時刻(UTC)を返す。未検出または不明な場合はNone."""
+        with self._lock:
+            return self._rate_limit_reset_at
+
+    def note_skipped_due_to_rate_limit(self) -> None:
+        """レート制限により詳細取得をスキップしたリポジトリを1件記録する."""
+        with self._lock:
+            self._skipped_due_to_rate_limit += 1
+
+    def skipped_due_to_rate_limit_count(self) -> int:
+        """レート制限により詳細取得をスキップしたリポジトリ数を返す."""
+        with self._lock:
+            return self._skipped_due_to_rate_limit
 
 
 def classify_seed_categories(seed: str) -> List[str]:
@@ -244,7 +299,13 @@ class GitHubCollector:
         return []
 
     def fetch_readme(self, repo_id: str) -> Optional[str]:
-        """リポジトリの README テキストを取得する."""
+        """リポジトリの README テキストを取得する.
+
+        coreレート制限枠が切れている場合はリクエストを送らずNoneを返す
+        (無駄なリクエストで枠切れ後も失敗を積み重ねないための早期打ち切り)。
+        """
+        if self.observer.is_core_rate_limited():
+            return None
         url = f"https://api.github.com/repos/{repo_id}/readme"
         resp = self._client.get(url, headers=self.headers)
         self.observer.record("readme", resp.status_code, resp.headers)
@@ -261,7 +322,12 @@ class GitHubCollector:
         return None
 
     def fetch_file_tree(self, repo_id: str, default_branch: str = "main") -> List[str]:
-        """リポジトリのファイルツリーを取得する (Git Trees API)."""
+        """リポジトリのファイルツリーを取得する (Git Trees API).
+
+        coreレート制限枠が切れている場合はリクエストを送らず空リストを返す。
+        """
+        if self.observer.is_core_rate_limited():
+            return []
         url = f"https://api.github.com/repos/{repo_id}/git/trees/{default_branch}?recursive=1"
         resp = self._client.get(url, headers=self.headers)
         self.observer.record("file_tree", resp.status_code, resp.headers)
@@ -271,11 +337,18 @@ class GitHubCollector:
         return []
 
     def fetch_dependency_files(self, repo_id: str, file_tree: List[str]) -> Dict[str, str]:
-        """主要な依存定義ファイルの内容を取得する."""
+        """主要な依存定義ファイルの内容を取得する.
+
+        coreレート制限枠が切れている場合はリクエストを送らず空辞書を返す。
+        """
         dep_files: Dict[str, str] = {}
+        if self.observer.is_core_rate_limited():
+            return dep_files
         target_files = [f for f in file_tree if os.path.basename(f) in DEPENDENCY_FILE_CANDIDATES]
 
         for filepath in target_files[:5]:  # 最大5ファイルまでに制限
+            if self.observer.is_core_rate_limited():
+                break
             url = f"https://api.github.com/repos/{repo_id}/contents/{filepath}"
             resp = self._client.get(url, headers=self.headers)
             self.observer.record("dependency_files", resp.status_code, resp.headers)
@@ -291,10 +364,16 @@ class GitHubCollector:
         return dep_files
 
     def fetch_owner_profile(self, owner_login: str, owner_type: str) -> GitHubOwnerProfile:
-        """GitHub所有者を照会し、公開メールのドメインだけを安全に保持する。"""
+        """GitHub所有者を照会し、公開メールのドメインだけを安全に保持する.
+
+        coreレート制限枠が切れている場合はリクエストを送らず、
+        `lookup_status="skipped_rate_limited"` のフォールバックを返す。
+        """
         account_type = owner_type or "Unknown"
         endpoint = "orgs" if account_type.lower() == "organization" else "users"
         fallback = GitHubOwnerProfile(login=owner_login, account_type=account_type)
+        if self.observer.is_core_rate_limited():
+            return fallback.model_copy(update={"lookup_status": "skipped_rate_limited"})
         url = f"https://api.github.com/{endpoint}/{owner_login}"
 
         try:
@@ -338,6 +417,13 @@ class GitHubCollector:
         """
         repo_id = repo_data.get("full_name", "")
         if not repo_id:
+            return None
+
+        if self.observer.is_core_rate_limited():
+            # core枠切れ後は各fetchメソッドがガードにより空値を返すため、
+            # README・ファイルツリー等が全て欠落した空のRepoRawを作らず、
+            # このリポジトリ自体を収集対象から除外する。
+            self.observer.note_skipped_due_to_rate_limit()
             return None
 
         default_branch = repo_data.get("default_branch", "main")
@@ -401,7 +487,8 @@ def format_observer_summary(observer: ApiCallObserver) -> str:
 
     レート制限に1件でも抵触していれば警告として強調し、成功/失敗が判別しやすい
     形式にする。Step 1完了後にログへ出すことで、収集件数や掲載件数の変化が
-    API側の失敗によるものかどうかを判断できるようにする。
+    API側の失敗によるものかどうかを判断できるようにする。coreレート制限枠切れに
+    より収集を早期打ち切りした場合は、スキップ件数とリセット予定時刻も表示する。
     """
     summary = observer.summary()
     if not summary:
@@ -416,6 +503,15 @@ def format_observer_summary(observer: ApiCallObserver) -> str:
 
     if observer.has_rate_limit_hits():
         lines.append("      ⚠️  レート制限への抵触を検出しました。掲載件数・収集品質への影響を確認してください。")
+
+    if observer.is_core_rate_limited():
+        skipped = observer.skipped_due_to_rate_limit_count()
+        reset_at = observer.rate_limit_reset_at()
+        reset_text = reset_at.isoformat() if reset_at else "不明"
+        lines.append(
+            f"      🛑 coreレート制限枠切れのため、以降の詳細取得を打ち切りました"
+            f"（スキップしたリポジトリ数: {skipped}件、リセット予定: {reset_text}）。"
+        )
 
     return "\n".join(lines)
 

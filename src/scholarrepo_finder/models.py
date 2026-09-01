@@ -14,7 +14,7 @@ class GitHubOwnerProfile(BaseModel):
     email_domain: Optional[str] = Field(None, description="公開メールから抽出したドメインのみ")
     is_verified_org: bool = Field(False, description="認証済み組織フラグ")
     account_age_years: int = Field(0, ge=0, description="アカウント経過年数")
-    lookup_status: Literal["not_checked", "found", "not_found", "failed"] = Field(
+    lookup_status: Literal["not_checked", "found", "not_found", "failed", "skipped_rate_limited"] = Field(
         "not_checked", description="所有者プロフィール照会の結果"
     )
 
