@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from scholarrepo_finder.collector import GitHubCollector
+from scholarrepo_finder.collector import ApiCallObserver, GitHubCollector, format_observer_summary
 from scholarrepo_finder.models import GitHubOwnerProfile
 
 
@@ -238,3 +238,77 @@ def test_shared_client_is_not_closed_by_collector() -> None:
 
     assert shared_client.is_closed is False
     shared_client.close()
+
+
+def test_api_call_observer_classifies_primary_rate_limit() -> None:
+    """X-RateLimit-Remaining: 0 の403をプライマリのレート制限として分類する。"""
+    observer = ApiCallObserver()
+    headers = httpx.Headers({"X-RateLimit-Remaining": "0"})
+
+    observer.record("readme", 403, headers)
+
+    assert observer.summary() == {"readme": {"rate_limit_primary": 1}}
+    assert observer.has_rate_limit_hits() is True
+
+
+def test_api_call_observer_classifies_secondary_rate_limit() -> None:
+    """レート制限枠が残っているのに403/429が返る場合はSecondary rate limit相当として分類する。"""
+    observer = ApiCallObserver()
+    headers = httpx.Headers({"X-RateLimit-Remaining": "500"})
+
+    observer.record("file_tree", 403, headers)
+    observer.record("owner_profile", 429, None)
+
+    summary = observer.summary()
+    assert summary["file_tree"]["rate_limit_secondary_or_abuse"] == 1
+    assert summary["owner_profile"]["rate_limit_secondary_or_abuse"] == 1
+    assert observer.has_rate_limit_hits() is True
+
+
+def test_api_call_observer_classifies_success_and_exception() -> None:
+    """200は成功、ステータスコードなし(None)は例外として分類し、レート制限扱いにしない。"""
+    observer = ApiCallObserver()
+
+    observer.record("readme", 200, httpx.Headers({}))
+    observer.record("owner_profile", None)
+
+    summary = observer.summary()
+    assert summary["readme"] == {"success": 1}
+    assert summary["owner_profile"] == {"exception": 1}
+    assert observer.has_rate_limit_hits() is False
+
+
+def test_format_observer_summary_warns_on_rate_limit() -> None:
+    """レート制限を検出した場合、警告メッセージを含めて整形する。"""
+    observer = ApiCallObserver()
+    observer.record("readme", 403, httpx.Headers({"X-RateLimit-Remaining": "0"}))
+
+    output = format_observer_summary(observer)
+
+    assert "readme" in output
+    assert "rate_limit_primary=1" in output
+    assert "⚠️" in output
+
+
+def test_format_observer_summary_without_records() -> None:
+    """記録がない場合は「記録なし」を返す。"""
+    observer = ApiCallObserver()
+
+    output = format_observer_summary(observer)
+
+    assert "記録なし" in output
+
+
+@patch("httpx.Client.get")
+def test_search_repositories_records_observer(mock_get: MagicMock) -> None:
+    """search_repositories がAPI呼び出し結果をobserverへ記録する。"""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = httpx.Headers({})
+    mock_resp.json.return_value = {"items": []}
+    mock_get.return_value = mock_resp
+
+    collector = GitHubCollector(token="dummy_token")
+    collector.search_repositories("topic:simulation")
+
+    assert collector.observer.summary() == {"search": {"success": 1}}
