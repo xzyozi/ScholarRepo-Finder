@@ -117,9 +117,20 @@ def classify_seed_categories(seed: str) -> List[str]:
 
 
 class GitHubCollector:
-    """GitHub API から学術・シミュレーションリポジトリを収集するクライアント."""
+    """GitHub API から学術・シミュレーションリポジトリを収集するクライアント.
 
-    def __init__(self, token: Optional[str] = None, timeout: float = 15.0) -> None:
+    HTTP接続はインスタンス生成時に確立した単一の `httpx.Client` を全メソッドで
+    再利用する。1件あたり複数回のGitHub API呼び出しが発生するため、呼び出しごとに
+    クライアントを生成・破棄する従来実装はTCP/TLSハンドシェイクの反復コストが
+    大きい。呼び出し元は `close()` を呼ぶか、コンテキストマネージャとして使うこと。
+    """
+
+    def __init__(
+        self,
+        token: Optional[str] = None,
+        timeout: float = 15.0,
+        client: Optional[httpx.Client] = None,
+    ) -> None:
         self.token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
         self.timeout = timeout
         self.headers = {
@@ -128,6 +139,20 @@ class GitHubCollector:
         }
         if self.token:
             self.headers["Authorization"] = f"token {self.token}"
+        # 外部から共有クライアントを渡された場合は所有権を持たず、closeでは破棄しない。
+        self._owns_client = client is None
+        self._client = client or httpx.Client(timeout=self.timeout)
+
+    def close(self) -> None:
+        """自身が生成したHTTPクライアントの接続をすべて解放する."""
+        if self._owns_client:
+            self._client.close()
+
+    def __enter__(self) -> "GitHubCollector":
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
 
     def search_repositories(
         self, query: str, sort: str = "stars", order: str = "desc", per_page: int = 30
@@ -136,61 +161,57 @@ class GitHubCollector:
         url = "https://api.github.com/search/repositories"
         params: dict[str, str | int] = {"q": query, "sort": sort, "order": order, "per_page": per_page}
 
-        with httpx.Client(timeout=self.timeout) as client:
-            resp = client.get(url, headers=self.headers, params=params)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("items", [])
-            elif resp.status_code == 403:
-                # Rate limit
-                return []
+        resp = self._client.get(url, headers=self.headers, params=params)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("items", [])
+        elif resp.status_code == 403:
+            # Rate limit
             return []
+        return []
 
     def fetch_readme(self, repo_id: str) -> Optional[str]:
         """リポジトリの README テキストを取得する."""
         url = f"https://api.github.com/repos/{repo_id}/readme"
-        with httpx.Client(timeout=self.timeout) as client:
-            resp = client.get(url, headers=self.headers)
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data.get("content", "")
-                encoding = data.get("encoding", "")
-                if encoding == "base64":
-                    try:
-                        return base64.b64decode(content).decode("utf-8", errors="replace")
-                    except Exception:
-                        return None
-                return content
-            return None
+        resp = self._client.get(url, headers=self.headers)
+        if resp.status_code == 200:
+            data = resp.json()
+            content = data.get("content", "")
+            encoding = data.get("encoding", "")
+            if encoding == "base64":
+                try:
+                    return base64.b64decode(content).decode("utf-8", errors="replace")
+                except Exception:
+                    return None
+            return content
+        return None
 
     def fetch_file_tree(self, repo_id: str, default_branch: str = "main") -> List[str]:
         """リポジトリのファイルツリーを取得する (Git Trees API)."""
         url = f"https://api.github.com/repos/{repo_id}/git/trees/{default_branch}?recursive=1"
-        with httpx.Client(timeout=self.timeout) as client:
-            resp = client.get(url, headers=self.headers)
-            if resp.status_code == 200:
-                tree_data = resp.json().get("tree", [])
-                return [item.get("path", "") for item in tree_data if "path" in item]
-            return []
+        resp = self._client.get(url, headers=self.headers)
+        if resp.status_code == 200:
+            tree_data = resp.json().get("tree", [])
+            return [item.get("path", "") for item in tree_data if "path" in item]
+        return []
 
     def fetch_dependency_files(self, repo_id: str, file_tree: List[str]) -> Dict[str, str]:
         """主要な依存定義ファイルの内容を取得する."""
         dep_files: Dict[str, str] = {}
         target_files = [f for f in file_tree if os.path.basename(f) in DEPENDENCY_FILE_CANDIDATES]
 
-        with httpx.Client(timeout=self.timeout) as client:
-            for filepath in target_files[:5]:  # 最大5ファイルまでに制限
-                url = f"https://api.github.com/repos/{repo_id}/contents/{filepath}"
-                resp = client.get(url, headers=self.headers)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    content = data.get("content", "")
-                    encoding = data.get("encoding", "")
-                    if encoding == "base64":
-                        try:
-                            dep_files[filepath] = base64.b64decode(content).decode("utf-8", errors="replace")
-                        except Exception:
-                            pass
+        for filepath in target_files[:5]:  # 最大5ファイルまでに制限
+            url = f"https://api.github.com/repos/{repo_id}/contents/{filepath}"
+            resp = self._client.get(url, headers=self.headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data.get("content", "")
+                encoding = data.get("encoding", "")
+                if encoding == "base64":
+                    try:
+                        dep_files[filepath] = base64.b64decode(content).decode("utf-8", errors="replace")
+                    except Exception:
+                        pass
         return dep_files
 
     def fetch_owner_profile(self, owner_login: str, owner_type: str) -> GitHubOwnerProfile:
@@ -201,8 +222,7 @@ class GitHubCollector:
         url = f"https://api.github.com/{endpoint}/{owner_login}"
 
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.get(url, headers=self.headers)
+            response = self._client.get(url, headers=self.headers)
         except httpx.HTTPError:
             return fallback.model_copy(update={"lookup_status": "failed"})
 
