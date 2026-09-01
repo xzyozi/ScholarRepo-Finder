@@ -1,7 +1,11 @@
 """データ収集モジュールの単体テスト (モック検証)."""
 
 import base64
+import threading
+from typing import List
 from unittest.mock import MagicMock, patch
+
+import httpx
 
 from scholarrepo_finder.collector import GitHubCollector
 from scholarrepo_finder.models import GitHubOwnerProfile
@@ -159,3 +163,78 @@ def test_fetch_repository_details_attaches_owner_profile(
     assert raw.owner_profile is not None
     assert raw.owner_profile.email_domain == "research-lab.edu"
     mock_owner.assert_called_once_with("research-lab", "Organization")
+
+
+def test_fetch_repository_details_fetches_readme_tree_and_owner_concurrently() -> None:
+    """README・ファイルツリー・所有者情報の取得が並列実行されることを検証する。
+
+    threading.Barrier を用いて、3つの呼び出しが同一タイミングで揃って実行
+    されていることを決定的に確認する (タイミング計測による不安定なテストを避ける)。
+    逐次実行のままだと3スレッドが同時にバリアへ到達できずタイムアウトする。
+    """
+    barrier = threading.Barrier(3, timeout=5.0)
+    call_order: List[str] = []
+    lock = threading.Lock()
+
+    def record(name: str) -> None:
+        with lock:
+            call_order.append(name)
+        barrier.wait()
+
+    collector = GitHubCollector(token="dummy")
+
+    def fake_fetch_readme(repo_id: str) -> str:
+        record("readme")
+        return "README"
+
+    def fake_fetch_file_tree(repo_id: str, default_branch: str = "main") -> List[str]:
+        record("file_tree")
+        return []
+
+    def fake_fetch_owner_profile(owner_login: str, owner_type: str) -> GitHubOwnerProfile:
+        record("owner_profile")
+        return GitHubOwnerProfile(login=owner_login, account_type=owner_type)
+
+    collector.fetch_readme = fake_fetch_readme  # type: ignore[method-assign]
+    collector.fetch_file_tree = fake_fetch_file_tree  # type: ignore[method-assign]
+    collector.fetch_owner_profile = fake_fetch_owner_profile  # type: ignore[method-assign]
+    collector.fetch_dependency_files = MagicMock(return_value={})  # type: ignore[method-assign]
+
+    try:
+        raw = collector.fetch_repository_details(
+            {
+                "full_name": "lab/sim-opt",
+                "name": "sim-opt",
+                "owner": {"login": "lab", "type": "User"},
+            }
+        )
+    finally:
+        collector.close()
+
+    assert raw is not None
+    assert sorted(call_order) == ["file_tree", "owner_profile", "readme"]
+
+
+def test_close_shuts_down_detail_executor_and_owned_client() -> None:
+    """close() が自身の詳細取得用スレッドプールと、自身が生成したHTTPクライアントを解放する。"""
+    collector = GitHubCollector(token="dummy")
+    collector.close()
+
+    # shutdown後のスレッドプールへのsubmitはRuntimeErrorになる (concurrent.futures の公開契約)。
+    try:
+        collector._detail_executor.submit(lambda: None)
+        raised = False
+    except RuntimeError:
+        raised = True
+    assert raised is True
+    assert collector._client.is_closed is True
+
+
+def test_shared_client_is_not_closed_by_collector() -> None:
+    """外部から注入した共有クライアントは、collector.close() では破棄されない。"""
+    shared_client = httpx.Client(timeout=5.0)
+    collector = GitHubCollector(token="dummy", client=shared_client)
+    collector.close()
+
+    assert shared_client.is_closed is False
+    shared_client.close()
