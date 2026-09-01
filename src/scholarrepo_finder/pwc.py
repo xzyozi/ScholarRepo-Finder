@@ -1,5 +1,6 @@
 """Papers with Code公開アーカイブのリポジトリ照合クライアント。"""
 
+from typing import Optional
 from urllib.parse import urlsplit
 
 import httpx
@@ -21,10 +22,31 @@ def _repository_url_variants(repository_url: str) -> list[str]:
 
 
 class PapersWithCodeClient:
-    """Hugging Face上のPWC最終公開アーカイブを参照するクライアント。"""
+    """Hugging Face上のPWC最終公開アーカイブを参照するクライアント.
 
-    def __init__(self, timeout: float = 15.0) -> None:
+    HTTP接続はインスタンス生成時に確立した単一の `httpx.Client` を再利用する。
+    Step 2では `lookup_repository` が収集件数分（実測932件）だけ逐次呼び出される
+    ため、呼び出しごとに新規クライアントを生成・破棄する従来実装はTCP/TLSハンド
+    シェイクの反復コストが大きい（`GitHubCollector` に対するPR #10と同種の改善）。
+    呼び出し元は `close()` を呼ぶか、コンテキストマネージャとして使うこと。
+    """
+
+    def __init__(self, timeout: float = 15.0, client: Optional[httpx.Client] = None) -> None:
         self.timeout = timeout
+        # 外部から共有クライアントを渡された場合は所有権を持たず、closeでは破棄しない。
+        self._owns_client = client is None
+        self._client = client or httpx.Client(timeout=self.timeout)
+
+    def close(self) -> None:
+        """自身が生成したHTTPクライアントの接続を解放する."""
+        if self._owns_client:
+            self._client.close()
+
+    def __enter__(self) -> "PapersWithCodeClient":
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
 
     def lookup_repository(self, repository_url: str) -> PapersWithCodeMatch:
         """GitHubリポジトリURLに紐づくPWC登録を照合する。"""
@@ -40,8 +62,7 @@ class PapersWithCodeClient:
             "length": 100,
         }
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.get(PWC_DATASET_FILTER_URL, params=params)
+            response = self._client.get(PWC_DATASET_FILTER_URL, params=params)
         except httpx.HTTPError:
             return PapersWithCodeMatch(lookup_status="failed")
 

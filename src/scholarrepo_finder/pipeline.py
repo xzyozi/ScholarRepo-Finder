@@ -44,6 +44,7 @@ def run_pipeline(
     loaded_config = load_scoring_config(config_path)
     config = loaded_config.config
     owns_collector = collector is None
+    owns_pwc_client = pwc_client is None
     col = collector or GitHubCollector()
     pwc = pwc_client or PapersWithCodeClient()
 
@@ -65,13 +66,19 @@ def run_pipeline(
     step_started_at = perf_counter()
     evaluated_records: list[tuple[RepoRaw, ScoreResult, ExtractedFeatures]] = []
     total_repositories = len(raw_repos)
-    for index, raw in enumerate(raw_repos, start=1):
-        raw.pwc_match = pwc.lookup_repository(raw.html_url)
-        features = extract_features(raw)
-        evaluated_records.append((raw, evaluate_repository(raw, features, loaded_config), features))
-        if index % 100 == 0 or index == total_repositories:
-            elapsed_seconds = perf_counter() - step_started_at
-            print(f"   -> Step 2: {index}/{total_repositories} 件を評価済み ({elapsed_seconds:.1f} 秒経過)")
+    try:
+        for index, raw in enumerate(raw_repos, start=1):
+            raw.pwc_match = pwc.lookup_repository(raw.html_url)
+            features = extract_features(raw)
+            evaluated_records.append((raw, evaluate_repository(raw, features, loaded_config), features))
+            if index % 100 == 0 or index == total_repositories:
+                elapsed_seconds = perf_counter() - step_started_at
+                print(f"   -> Step 2: {index}/{total_repositories} 件を評価済み ({elapsed_seconds:.1f} 秒経過)")
+    finally:
+        # run_pipeline内で生成したPWCクライアントの接続だけを解放する。
+        # 呼び出し元から渡されたクライアントは呼び出し元の責任で管理する。
+        if owns_pwc_client:
+            pwc.close()
     step_elapsed_seconds = perf_counter() - step_started_at
     print(f"   -> Step 2 完了: {total_repositories} 件を評価 ({step_elapsed_seconds:.1f} 秒)")
 
