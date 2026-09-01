@@ -1,6 +1,7 @@
 """ScholarRepo-Finder データ収集モジュール (Data Ingestion)."""
 
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import os
 from typing import Any, Dict, List, Optional
@@ -130,6 +131,7 @@ class GitHubCollector:
         token: Optional[str] = None,
         timeout: float = 15.0,
         client: Optional[httpx.Client] = None,
+        max_detail_workers: int = 3,
     ) -> None:
         self.token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
         self.timeout = timeout
@@ -142,9 +144,15 @@ class GitHubCollector:
         # 外部から共有クライアントを渡された場合は所有権を持たず、closeでは破棄しない。
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=self.timeout)
+        # fetch_repository_details内の独立したAPI呼び出し(README・ファイルツリー・
+        # 所有者情報)を並列実行するためのスレッドプール。httpx.Clientはスレッドセーフ
+        # であり、単一インスタンス共有の方が接続プーリング効率も良い
+        # (https://github.com/encode/httpx/discussions/1633)。
+        self._detail_executor = ThreadPoolExecutor(max_workers=max_detail_workers, thread_name_prefix="ghc-detail")
 
     def close(self) -> None:
-        """自身が生成したHTTPクライアントの接続をすべて解放する."""
+        """自身が生成したスレッドプールとHTTPクライアントの接続をすべて解放する."""
+        self._detail_executor.shutdown(wait=True)
         if self._owns_client:
             self._client.close()
 
@@ -251,14 +259,33 @@ class GitHubCollector:
         )
 
     def fetch_repository_details(self, repo_data: Dict[str, Any]) -> Optional[RepoRaw]:
-        """検索結果の 1 レコードから詳細な RepoRaw オブジェクトを構築する."""
+        """検索結果の 1 レコードから詳細な RepoRaw オブジェクトを構築する.
+
+        README・ファイルツリー・所有者情報の取得は互いに独立したGitHub API呼び出し
+        であり、いずれもネットワーク応答待ちが支配的なI/Oバウンド処理のため、
+        スレッドプールで並列実行してレイテンシを重ね合わせる。依存定義ファイルの
+        取得はファイルツリーの結果に依存するため、並列化の対象外とし逐次実行する。
+        """
         repo_id = repo_data.get("full_name", "")
         if not repo_id:
             return None
 
         default_branch = repo_data.get("default_branch", "main")
-        readme = self.fetch_readme(repo_id)
-        file_tree = self.fetch_file_tree(repo_id, default_branch)
+
+        owner_info = repo_data.get("owner") or {}
+        owner_name = owner_info.get("login", "") if isinstance(owner_info, dict) else ""
+        owner_type = owner_info.get("type", "Unknown") if isinstance(owner_info, dict) else "Unknown"
+
+        readme_future = self._detail_executor.submit(self.fetch_readme, repo_id)
+        file_tree_future = self._detail_executor.submit(self.fetch_file_tree, repo_id, default_branch)
+        owner_profile_future = (
+            self._detail_executor.submit(self.fetch_owner_profile, owner_name, owner_type) if owner_name else None
+        )
+
+        readme = readme_future.result()
+        file_tree = file_tree_future.result()
+        owner_profile = owner_profile_future.result() if owner_profile_future else None
+
         dep_files = self.fetch_dependency_files(repo_id, file_tree)
 
         created_at_str = repo_data.get("created_at")
@@ -277,11 +304,6 @@ class GitHubCollector:
 
         license_info = repo_data.get("license") or {}
         license_spdx = license_info.get("spdx_id") if isinstance(license_info, dict) else None
-
-        owner_info = repo_data.get("owner") or {}
-        owner_name = owner_info.get("login", "") if isinstance(owner_info, dict) else ""
-        owner_type = owner_info.get("type", "Unknown") if isinstance(owner_info, dict) else "Unknown"
-        owner_profile = self.fetch_owner_profile(owner_name, owner_type) if owner_name else None
 
         return RepoRaw(
             repo_id=repo_id,
