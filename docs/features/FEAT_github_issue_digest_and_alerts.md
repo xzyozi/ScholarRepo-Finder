@@ -13,13 +13,13 @@ related_documents:
 
 # 機能アイデア検討書：GitHub Issue 連携 (Weekly Digest & 高スコア速報)
 
-| 項目 | 内容 |
-| :--- | :--- |
-| 文書番号 | SRF-FEAT-001 |
-| 機能名 | GitHub Issue 連携による学術OSS通知・研究ノート機能 |
-| ステータス | アイデア検討中 (Proposed / Backlog) |
-| 作成日 | 2026-08-31 |
-| 作成者 | ScholarRepo-Finder 開発チーム |
+| 項目       | 内容                                               |
+| :--------- | :------------------------------------------------- |
+| 文書番号   | SRF-FEAT-001                                       |
+| 機能名     | GitHub Issue 連携による学術OSS通知・研究ノート機能 |
+| ステータス | アイデア検討中 (Proposed / Backlog)                |
+| 作成日     | 2026-08-31                                         |
+| 作成者     | ScholarRepo-Finder 開発チーム                      |
 
 ---
 
@@ -37,22 +37,15 @@ GitHub の標準機能である **GitHub Issues** を活用し、クロールパ
 
 ```mermaid
 flowchart TD
-    Actions[GitHub Actions / 定期クロール] -->|新着OSS検出| Judgement{スコア・頻度判定}
-    
-    Judgement -->|パターンA: 週次まとめ| WeeklyIssue[Weekly Digest Issue 自動起票
-- 週刊 学術OSSランキング
-- トピック別まとめ]
-    Judgement -->|パターンB: 超高スコア (Score>=85)| AlertIssue[高スコア速報 Issue 自動起票
-- 個別リポジトリ詳細
-- 論文リンク / 構造ハイライト]
+    Actions["GitHub Actions / 定期クロール"] -->|新着OSS検出| Judgement{"スコア・頻度判定"}
 
-    WeeklyIssue --> UserNotify((GitHub 通知 / メール))
+    Judgement -->|"パターンA: 週次まとめ"| WeeklyIssue["Weekly Digest Issue 自動起票<br>- 週刊 学術OSSランキング<br>- トピック別まとめ"]
+    Judgement -->|"パターンB: 超高スコア Score>=85"| AlertIssue["高スコア速報 Issue 自動起票<br>- 個別リポジトリ詳細<br>- 論文リンク / 構造ハイライト"]
+
+    WeeklyIssue --> UserNotify(("GitHub 通知 / メール"))
     AlertIssue --> UserNotify
-    
-    AlertIssue --> NoteTaking[Issue コメント欄での研究ノート蓄積
-- 再現実験コマンドログ
-- パラメータ検証メモ
-- 派生論文のリンク]
+
+    AlertIssue --> NoteTaking["Issue コメント欄での研究ノート蓄積<br>- 再現実験コマンドログ<br>- パラメータ検証メモ<br>- 派生論文のリンク"]
 ```
 
 ### 2.1 主な提供価値
@@ -79,10 +72,10 @@ flowchart TD
 今週新たに発見・高評価された学術研究・アルゴリズム検証用OSSの一覧です。
 
 ### 🏆 今週の注目リポジトリ (Top Scores)
-| リポジトリ | 総合スコア | 言語 | 論文/DOI | 概要 |
-| :--- | :---: | :---: | :---: | :--- |
-| [lab/vrp-rl-solver](https://github.com/...) | **88.0** | Python | [arXiv:2405.xxxxx](...) | 強化学習を用いた大規模配車最適化ソルバー |
-| [team/discrete-sim](https://github.com/...) | **84.5** | Rust | [DOI:10.1016/...](...) | 高速離散事象シミュレーション基盤 |
+| リポジトリ                                  | 総合スコア |  言語  |        論文/DOI         | 概要                                     |
+| :------------------------------------------ | :--------: | :----: | :---------------------: | :--------------------------------------- |
+| [lab/vrp-rl-solver](https://github.com/...) |  **88.0**  | Python | [arXiv:2405.xxxxx](...) | 強化学習を用いた大規模配車最適化ソルバー |
+| [team/discrete-sim](https://github.com/...) |  **84.5**  |  Rust  | [DOI:10.1016/...](...)  | 高速離散事象シミュレーション基盤         |
 
 ### 🏷️ カテゴリ別ピックアップ
 - **Operations Research / 最適化**: `lab/vrp-rl-solver`, `...`

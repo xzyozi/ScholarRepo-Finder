@@ -108,9 +108,9 @@ ETag条件付きリクエスト]
 - repos.json 読込
 - MiniSearch 即時検索
 - ファセット絞り込み]
-        Exporter[Markdown Exporter (Blob/Download)
+        Exporter["Markdown Exporter (Blob/Download)
 - 検索結果一括 .md ダウンロード
-- 個別 Markdown 引用コピー]
+- 個別 Markdown 引用コピー"]
         UserBrowser((ユーザー / 研究ノート))
 
         DataBuilder --> DeployStep
